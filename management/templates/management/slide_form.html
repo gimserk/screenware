@@ -1,0 +1,72 @@
+{% extends 'management/base.html' %}
+
+{% block title %}Edit Slide{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Edit Slide: {{ object.title }}</h1>
+</div>
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" class="btn btn-success">Save Changes</button>
+    <a href="{% url 'manage_slides' object.slide_deck.pk %}" class="btn btn-secondary">Cancel</a>
+</form>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // --- Configuration ---
+        // Maps the 'value' of the content_type dropdown to the form fields it should display.
+        // These field names match the names in your forms.py file.
+        const fieldMapping = {
+            'text': ['text_content'],
+            'image': ['image_content'],
+            'video': ['video_content'],
+            'youtube': ['youtube_video_id'],
+            'calendar': ['calendar_url', 'calendar_display_style'],
+            'weather': ['latitude', 'longitude', 'api_key'],
+            'rss': ['rss_feed_url']
+        };
+
+        // --- Get All Content-Specific Fields ---
+        // This creates a unique list of all fields that can be toggled.
+        const allContentFields = [...new Set([].concat(...Object.values(fieldMapping)))];
+
+        // --- Get a reference to the dropdown menu ---
+        const contentTypeSelect = document.getElementById('id_content_type');
+
+        function toggleFields() {
+            // Get the currently selected content type
+            const selectedType = contentTypeSelect.value;
+            // Get the list of fields that should be visible for the selected type
+            const fieldsToShow = fieldMapping[selectedType] || [];
+
+            // Loop through ALL possible content fields
+            allContentFields.forEach(fieldName => {
+                // Find the input/select/textarea element by its Django-generated ID
+                const fieldElement = document.getElementById(`id_${fieldName}`);
+                if (fieldElement) {
+                    // Find the parent <p> tag that Django creates with form.as_p
+                    const parentPara = fieldElement.closest('p');
+                    if (parentPara) {
+                        // Show or hide the entire paragraph (label + input)
+                        if (fieldsToShow.includes(fieldName)) {
+                            parentPara.style.display = ''; // Show the element
+                        } else {
+                            parentPara.style.display = 'none'; // Hide the element
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- Event Listener ---
+        // Add an event listener that calls toggleFields whenever the dropdown value changes.
+        contentTypeSelect.addEventListener('change', toggleFields);
+
+        // --- Initial Call ---
+        // Call the function once when the page loads to set the correct initial state.
+        toggleFields();
+    });
+</script>
+{% endblock %}

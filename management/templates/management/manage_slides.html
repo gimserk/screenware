@@ -1,0 +1,124 @@
+{% extends 'management/base.html' %}
+
+{% block title %}Manage Slides for {{ slidedeck.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Manage Slides: {{ slidedeck.name }}</h1>
+    <a href="{% url 'manage_slidedeck_list' %}" class="btn btn-sm btn-outline-secondary">Back to Slide Decks</a>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h3>Existing Slides</h3>
+        <small id="order-status" class="text-muted"></small> </div>
+    <div class="card-body">
+        <ul class="list-group" id="slide-list">
+            {% for slide in slides %}
+            <li class="list-group-item d-flex justify-content-between align-items-center" data-slide-id="{{ slide.pk }}">
+                <div>
+                    <i class="fas fa-grip-vertical me-2" style="cursor: grab;"></i> <strong>#{{ forloop.counter }} - {{ slide.title }}</strong>
+                    <small class="text-muted">({{ slide.get_content_type_display }})</small>
+                </div>
+                <div>
+                    <a href="{% url 'manage_slide_edit' slide.pk %}" class="btn btn-sm btn-primary">Edit</a>
+                    <a href="{% url 'manage_slide_delete' slide.pk %}" class="btn btn-sm btn-danger">Delete</a>
+                </div>
+            </li>
+            {% empty %}
+            <li class="list-group-item">No slides have been added to this deck yet.</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Add New Slide</h3>
+    </div>
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit" class="btn btn-success">Add Slide</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // ===================================================
+    // ## 1. Drag-and-Drop Reordering Logic ##
+    // ===================================================
+    const slideList = document.getElementById('slide-list');
+    const orderStatus = document.getElementById('order-status');
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    new Sortable(slideList, {
+        animation: 150,
+        handle: '.fa-grip-vertical',
+        onEnd: function (evt) {
+            const newOrder = Array.from(slideList.children).map(li => li.dataset.slideId);
+            orderStatus.textContent = 'Saving...';
+            
+            fetch("{% url 'manage_slides_reorder' slidedeck.pk %}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({ new_order: newOrder })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    window.location.reload();
+                } else {
+                    alert('Error saving order.');
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+    });
+
+    // ===================================================
+    // ## 2. Dynamic Form Fields Logic ##
+    // ===================================================
+    const fieldMapping = {
+        'text': ['text_content'],
+        'image': ['image_content'],
+        'video': ['video_content'],
+        'youtube': ['youtube_video_id'],
+        'calendar': ['calendar_url', 'calendar_display_style'],
+        'weather': ['latitude', 'longitude', 'api_key'],
+        'rss': ['rss_feed_url']
+    };
+
+    const allContentFields = [...new Set([].concat(...Object.values(fieldMapping)))];
+    const contentTypeSelect = document.getElementById('id_content_type');
+
+    function toggleFields() {
+        const selectedType = contentTypeSelect.value;
+        const fieldsToShow = fieldMapping[selectedType] || [];
+
+        allContentFields.forEach(fieldName => {
+            const fieldElement = document.getElementById(`id_${fieldName}`);
+            if (fieldElement) {
+                const parentPara = fieldElement.closest('p');
+                if (parentPara) {
+                    if (fieldsToShow.includes(fieldName)) {
+                        parentPara.style.display = '';
+                    } else {
+                        parentPara.style.display = 'none';
+                    }
+                }
+            }
+        });
+    }
+
+    // Add event listener and run on page load
+    contentTypeSelect.addEventListener('change', toggleFields);
+    toggleFields();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends 'management/base.html' %}
+
+{% block title %}Manage Slide Decks{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Manage Slide Decks</h1>
+    <a href="{% url 'manage_slidedeck_new' %}" class="btn btn-sm btn-outline-secondary">Add New Slide Deck</a>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Slug</th>
+                <th>Last Updated</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for deck in slidedecks %}
+            <tr>
+                <td>{{ deck.name }}</td>
+                <td><code>{{ deck.slug }}</code></td>
+                <td>{{ deck.last_updated|date:"Y-m-d P" }}</td>
+                <td>
+                    <a href="{% url 'manage_slides' deck.pk %}" class="btn btn-sm btn-info">Manage Slides</a>
+                    <a href="{% url 'manage_slidedeck_edit' deck.pk %}" class="btn btn-sm btn-primary">Edit</a>
+                    <a href="{% url 'manage_slidedeck_delete' deck.pk %}" class="btn btn-sm btn-danger">Delete</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4" class="text-center">No slide decks found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ slidedeck.name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        .connection-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: #dc3545;
+            color: white;
+            text-align: center;
+            padding: 10px;
+            z-index: 1050;
+            font-size: 1.1rem;
+            display: none;
+        }
+        .connection-banner.visible {
+            display: block;
+        }
+        .carousel, .carousel-inner, .carousel-item {
+            height: 100%;
+        }
+        .carousel-item {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #111;
+            width: 100%;
+            height: 100%;
+            animation: fadeIn 1.5s ease-in-out;
+        }
+        .carousel-item.active {
+            display: flex;
+        }
+        .carousel-item img, .carousel-item video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        .youtube-container, .youtube-player-div, .youtube-container iframe {
+            width: 100%;
+            height: 100%;
+            border: 0;
+        }
+        .text-content {
+            font-size: 4rem;
+            padding: 20px;
+            font-weight: bold;
+        }
+        .calendar-content {
+            padding: 15px;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background-color: #ffffff;
+            color: #333;
+        }
+        .calendar-content h2 {
+            font-size: 2.5rem;
+            flex-shrink: 0;
+            margin-bottom: 15px;
+            color: #0056b3;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            width: 100%;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+        .calendar-day {
+            background-color: #e9ecef;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+        }
+        .calendar-day h4 {
+            margin-top: 0;
+            font-size: 1.3rem;
+            border-bottom: 2px solid #0056b3;
+            padding: 10px;
+            text-align: center;
+            color: #0056b3;
+            flex-shrink: 0;
+        }
+        .day-grid {
+            display: grid;
+            grid-template-rows: repeat(12, 1fr);
+            flex-grow: 1;
+            gap: 5px;
+            padding: 10px;
+        }
+        .time-slot {
+            display: flex;
+            align-items: flex-start;
+            font-size: 1rem;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        .time-slot .slot-time {
+            font-weight: bold;
+            margin-right: 10px;
+            flex-shrink: 0;
+            color: #495057;
+        }
+        .time-slot .slot-event {
+            background-color: #007bff;
+            color: #ffffff;
+            padding: 6px 10px;
+            border-radius: 3px;
+            width: 100%;
+            font-weight: 500;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .agenda-content {
+            width: 100%;
+            height: 100%;
+            background-color: #003366;
+            color: #ffffff;
+            padding: 3vw;
+            display: flex;
+            flex-direction: column;
+        }
+        .agenda-header {
+            flex-shrink: 0;
+            border-bottom: 4px solid #f0ad4e;
+            margin-bottom: 1.5vw;
+            padding-bottom: 1vw;
+        }
+        .agenda-title {
+            font-size: 2.8vw;
+            font-weight: bold;
+        }
+        .agenda-date {
+            font-size: 2vw;
+            opacity: 0.8;
+        }
+        .agenda-list {
+            flex-grow: 1;
+            overflow-y: auto;
+            font-size: 1.8vw;
+            list-style: none;
+            padding: 0;
+        }
+        .agenda-item {
+            display: flex;
+            padding: 1.5vw 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .agenda-time {
+            flex-basis: 35%;
+            flex-shrink: 0;
+            font-weight: bold;
+            color: #f0ad4e;
+        }
+        .agenda-name {
+            flex-grow: 1;
+        }
+        .weather-slide {
+            width: 100%;
+            height: 100%;
+            color: white;
+            background-size: cover;
+            background-position: center;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            padding: 2vw;
+            animation: kenburns 30s ease-out infinite;
+        }
+        .weather-frame {
+            width: calc(100% - 4vw);
+            height: calc(100% - 4vw);
+            margin: 2vw;
+            position: absolute;
+            top: 0; left: 0;
+            border-radius: 25px;
+            box-shadow: 0 0 25px rgba(0,0,0,0.5);
+            background: linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0));
+            border: 2px solid transparent;
+            background-clip: padding-box;
+        }
+        .weather-frame::before {
+            content: '';
+            position: absolute;
+            top: 0; right: 0; bottom: 0; left: 0;
+            z-index: -1;
+            margin: -2px;
+            border-radius: inherit;
+            background: linear-gradient(135deg, #00ffff, #17a2b8, #343a40, #17a2b8, #00ffff);
+            background-size: 400% 400%;
+            animation: animated-border 8s ease-in-out infinite;
+        }
+        .weather-main {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-grow: 1;
+            gap: 2vw;
+            z-index: 1;
+            animation: slideUp 1s ease-out 0.5s backwards;
+        }
+        .weather-main-icon { width: 15vw; height: 15vw; }
+        .weather-main-temp { font-size: 14vw; font-weight: 700; line-height: 1; }
+        .weather-main-details { font-size: 3vw; text-align: left; }
+        .weather-main-details .desc { text-transform: capitalize; font-weight: bold; }
+        .weather-forecasts {
+            flex-shrink: 0;
+            background: rgba(0, 0, 0, 0.35);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 15px;
+            padding: 1.5vw;
+            z-index: 1;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            animation: slideUp 1s ease-out 1s backwards;
+        }
+        .weather-hourly {
+            display: flex;
+            justify-content: space-around;
+            padding-bottom: 1.5vw;
+            margin-bottom: 1.5vw;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .hourly-item { text-align: center; font-size: 1.5vw; }
+        .hourly-item img { width: 4vw; height: 4vw; }
+        .daily-forecast {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+        .daily-item { text-align: center; font-size: 1.6vw; width: 18%; }
+        .daily-item img { width: 5vw; height: 5vw; }
+        .daily-day { font-weight: bold; }
+        .rss-content {
+            display: flex;
+            flex-direction: column;
+            padding: 40px;
+            background-color: #343a40;
+            color: #f8f9fa;
+            text-align: left;
+            width: 100%;
+            height: 100%;
+        }
+        .rss-title {
+            font-size: 3rem;
+            font-weight: bold;
+            border-bottom: 3px solid #0d6efd;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        .rss-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        .rss-list-item {
+            font-size: 1.8rem;
+            padding: 15px 0;
+            border-bottom: 1px solid #495057;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideUp {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes kenburns {
+            0%, 100% { background-size: 100% 100%; background-position: center; }
+            50% { background-size: 120% 120%; background-position: center; }
+        }
+        @keyframes animated-border {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+          .weather-slide {
+            width: 100%;
+            height: 100%;
+            color: white;
+            background-size: cover;
+            background-position: center;
+            text-shadow: 1px 1px 4px rgba(0,0,0,0.7);
+            display: flex;
+            animation: kenburns 40s ease-out infinite;
+        }
+        .weather-grid {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: 4fr 5fr; /* 4 parts for current, 5 for forecast */
+            padding: 3vh 4vw;
+            gap: 4vw;
+        }
+        
+        /* Left Column: Current Weather */
+        .weather-current {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: left;
+        }
+        .weather-location {
+            font-size: clamp(2rem, 5vh, 4rem);
+            font-weight: 500;
+        }
+        .weather-main-temp {
+            display: flex;
+            align-items: center;
+            font-size: clamp(8rem, 20vh, 15rem);
+            font-weight: 700;
+            line-height: 1;
+            margin: -1vh 0;
+        }
+        .weather-main-temp img {
+            width: 22vh;
+            height: 22vh;
+            margin-right: -2vw;
+            filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
+        }
+        .weather-description {
+            font-size: clamp(1.5rem, 3.5vh, 2.5rem);
+            text-transform: capitalize;
+            font-weight: 300;
+            margin-left: 1vw;
+            margin-top: 1vh;
+        }
+        .weather-sub-details {
+            font-size: clamp(1.2rem, 2.5vh, 1.8rem);
+            margin-top: 2vh;
+            margin-left: 1vw;
+            opacity: 0.8;
+        }
+        .weather-sub-details span:not(:last-child) {
+            margin-right: 2vw;
+        }
+        
+        /* Right Column: Forecasts */
+        .weather-forecast {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 3vh;
+            background-color: rgba(0, 0, 0, 0.25);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 3vh 2.5vw;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .forecast-title {
+            font-size: clamp(1rem, 2.2vh, 1.5rem);
+            font-weight: 600;
+            letter-spacing: 2px;
+            color: rgba(255, 255, 255, 0.7);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+            padding-bottom: 1.5vh;
+            margin-bottom: 1vh;
+        }
+        
+        /* Hourly Forecast */
+        .hourly-items-container {
+            display: flex;
+            justify-content: space-between;
+        }
+        .hourly-item {
+            text-align: center;
+            font-size: clamp(1rem, 2.5vh, 1.5rem);
+            font-weight: 500;
+        }
+        .hourly-item img {
+            width: 8vh;
+            height: 8vh;
+        }
+        
+        /* Daily Forecast */
+        .daily-items-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5vh;
+        }
+        .daily-item {
+            display: grid;
+            grid-template-columns: 2.5fr 1fr 1fr;
+            align-items: center;
+            font-size: clamp(1.2rem, 3vh, 2rem);
+            font-weight: 500;
+        }
+        .daily-item img {
+            width: 7vh;
+            height: 7vh;
+            justify-self: center;
+        }
+        .daily-temps {
+            text-align: right;
+        }
+        .daily-temps .temp-low {
+            margin-left: 1vw;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+
+<div id="connection-banner" class="connection-banner">
+    Cannot reach the bulletin board server. Information may be out of date.
+</div>
+
+<div id="bulletinCarousel" class="carousel slide" data-bs-ride="carousel" data-bs-pause="false"
+     data-last-updated="{{ slidedeck.last_updated.isoformat }}"
+     data-status-url="{% url 'slidedeck_status' slidedeck.slug %}">
+    <div class="carousel-inner">
+        {% for slide in slides %}
+            <div class="carousel-item {% if forloop.first %}active{% endif %}" data-bs-interval="{{ slide.duration_ms }}">
+                
+                {% if slide.content_type == 'text' %}
+                    <div class="text-content">
+                        <h1>{{ slide.title }}</h1>
+                        <p>{{ slide.text_content }}</p>
+                    </div>
+
+                {% elif slide.content_type == 'image' and slide.image_content %}
+                    <img src="{{ slide.image_content.url }}" alt="{{ slide.title }}">
+
+                {% elif slide.content_type == 'video' and slide.video_content %}
+                    <video autoplay muted loop>
+                        <source src="{{ slide.video_content.url }}" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+
+                {% elif slide.content_type == 'youtube' and slide.youtube_video_id %}
+                    <div class="youtube-container">
+                        <div id="player-{{ forloop.counter }}" class="youtube-player-div" data-video-id="{{ slide.youtube_video_id }}"></div>
+                    </div>
+
+                {% elif slide.content_type == 'calendar' %}
+                    {% if slide.calendar_display_style == 'html_embed' and slide.calendar_url %}
+                        <iframe 
+                            src="{{ slide.calendar_url }}" 
+                            style="width: 100%; height: 100%; border: none;" 
+                            sandbox="allow-scripts allow-same-origin">
+                        </iframe>
+                    
+                    {% elif slide.calendar_display_style == 'ics_today' %}
+                        <div class="agenda-content">
+                            <div class="agenda-header">
+                                <div class="agenda-title">{{ slide.title }}</div>
+                                <div class="agenda-date">{% now "l, F jS" %}</div>
+                            </div>
+                            <ul class="agenda-list">
+                                {% for event in slide.todays_events %}
+                                <li class="agenda-item">
+                                    <span class="agenda-time">
+                                        {% if event.all_day %}
+                                            All Day
+                                        {% else %}
+                                            {{ event.begin|date:"g:i A" }} - {{ event.end|date:"g:i A" }}
+                                        {% endif %}
+                                    </span>
+                                    <span class="agenda-name">{{ event.summary }}</span>
+                                </li>
+                                {% empty %}
+                                <li class="agenda-item">No events scheduled for today.</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+
+                    {% elif slide.calendar_display_style == 'ics_week' and slide.weekly_calendar_data %}
+                        <div class="calendar-content">
+                            <h2>{{ slide.title }}</h2>
+                            <div class="calendar-grid">
+                                {% for day_data in slide.weekly_calendar_data %}
+                                    <div class="calendar-day">
+                                        <h4>{{ day_data.date|date:"l, M j" }}</h4>
+                                        <div class="day-grid">
+                                            {% for slot in day_data.time_slots %}
+                                                {% if not slot.is_continuation %}
+                                                    <div class="time-slot" 
+                                                         style="{% if slot.event %}grid-row: span {{ slot.event.duration }};{% endif %}">
+                                                        <span class="slot-time">{{ slot.time|date:"g A" }}</span>
+                                                        {% if slot.event %}
+                                                            <span class="slot-event">{{ slot.event.name }}</span>
+                                                        {% endif %}
+                                                    </div>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+
+                 {% elif slide.content_type == 'weather' and slide.weather_data %}
+                    {% with w=slide.weather_data %}
+                    <div class="weather-slide" style="background-image: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.8)), url('https://source.unsplash.com/1920x1080/?{{ w.background_keyword }}');">
+                        
+                        <div class="weather-grid">
+
+                            <div class="weather-current">
+                                <div class="weather-location">{{ slide.title }}</div>
+                                <div class="weather-main-temp">
+                                    <img src="http://openweathermap.org/img/wn/{{ w.current.weather.0.icon }}@4x.png" alt="weather icon">
+                                    <span>{{ w.current.main.temp|floatformat:0 }}°</span>
+                                </div>
+                                <div class="weather-description">{{ w.current.weather.0.description }}</div>
+                                <div class="weather-sub-details">
+                                    <span>Feels Like: {{ w.current.main.feels_like|floatformat:0 }}°</span>
+                                    <span>Wind: {{ w.current.wind.speed|floatformat:0 }} mph</span>
+                                </div>
+                            </div>
+
+                            <div class="weather-forecast">
+                                <div class="hourly-forecast">
+                                    <div class="forecast-title">HOURLY FORECAST</div>
+                                    <div class="hourly-items-container">
+                                        {% for hour in w.hourly %}
+                                        <div class="hourly-item">
+                                            <div class="hourly-time">{{ hour.dt|date:"g a" }}</div>
+                                            <img src="http://openweathermap.org/img/wn/{{ hour.weather.0.icon }}@2x.png" alt="">
+                                            <div class="hourly-temp">{{ hour.main.temp|floatformat:0 }}°</div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+
+                                <div class="weather-forecast">
+    <div class="daily-forecast">
+        <div class="forecast-title">5-DAY FORECAST</div>
+        <div class="daily-items-container">
+            {% for day in w.daily %}
+            <div class="daily-item">
+                
+                <div class="daily-day">{{ day.dt|date:"D" }}</div>
+
+                <img src="http://openweathermap.org/img/wn/{{ day.weather.0.icon }}d@2x.png" alt="">
+                <div class="daily-temps">
+                    <span class="temp-high">{{ day.temp.max|floatformat:0 }}°</span>
+                    <span class="temp-low">{{ day.temp.min|floatformat:0 }}°</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+                            </div>
+
+                        </div>
+                    </div>
+                    {% endwith %}
+
+                {% elif slide.content_type == 'rss' and slide.rss_data %}
+                    <div class="rss-content">
+                        <h2 class="rss-title">{{ slide.rss_data.title }}</h2>
+                        <ul class="rss-list">
+                            {% for item in slide.rss_data.entries %}
+                                <li class="rss-list-item">{{ item.title }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+    document.documentElement.addEventListener('click', () => {
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+        } else {
+            document.documentElement.requestFullscreen();
+        }
+    });
+
+    const carouselElement = document.getElementById('bulletinCarousel');
+    const lastUpdated = carouselElement.dataset.lastUpdated;
+    const statusUrl = carouselElement.dataset.statusUrl;
+    const connectionBanner = document.getElementById('connection-banner');
+
+    setInterval(() => {
+        fetch(statusUrl)
+            .then(response => {
+                connectionBanner.classList.remove('visible');
+                return response.json();
+            })
+            .then(data => {
+                const clientTimestamp = new Date(lastUpdated);
+                const serverTimestamp = new Date(data.last_updated);
+                if (serverTimestamp > clientTimestamp) {
+                    location.reload(true);
+                }
+            })
+            .catch(error => {
+                console.error('Error checking for updates:', error);
+                connectionBanner.classList.add('visible');
+            });
+    }, 15000);
+
+    const players = {};
+
+    function onYouTubeIframeAPIReady() {
+        document.querySelectorAll('.youtube-player-div').forEach(playerDiv => {
+            const videoId = playerDiv.dataset.videoId;
+            const playerId = playerDiv.id;
+            players[playerId] = new YT.Player(playerId, {
+                height: '100%',
+                width: '100%',
+                videoId: videoId,
+                playerVars: {
+                    'autoplay': 0,
+                    'controls': 0,
+                    'loop': 1,
+                    'playlist': videoId,
+                    'mute': 1,
+                    'showinfo': 0,
+                    'autohide': 1
+                },
+                events: {
+                    'onReady': onPlayerReady
+                }
+            });
+        });
+    }
+
+    function onPlayerReady(event) {
+        const playerIframe = event.target.getIframe();
+        if (playerIframe.closest('.carousel-item').classList.contains('active')) {
+            event.target.playVideo();
+        }
+    }
+
+    carouselElement.addEventListener('slide.bs.carousel', event => {
+        const previousSlide = document.querySelectorAll('.carousel-item')[event.from];
+        const previousPlayerDiv = previousSlide.querySelector('.youtube-player-div');
+        if (previousPlayerDiv && players[previousPlayerDiv.id]) {
+            players[previousPlayerDiv.id].stopVideo();
+        }
+
+        const newSlide = document.querySelectorAll('.carousel-item')[event.to];
+        const newPlayerDiv = newSlide.querySelector('.youtube-player-div');
+        if (newPlayerDiv && players[newPlayerDiv.id]) {
+            players[newPlayerDiv.id].playVideo();
+        }
+    });
+</script>
+
+</body>
+</html>

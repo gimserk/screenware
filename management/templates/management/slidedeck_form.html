@@ -1,0 +1,16 @@
+{% extends 'management/base.html' %}
+
+{% block title %}{% if object %}Edit Slide Deck{% else %}New Slide Deck{% endif %}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">{% if object %}Edit Slide Deck{% else %}Create New Slide Deck{% endif %}</h1>
+</div>
+
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" class="btn btn-success">Save</button>
+    <a href="{% url 'manage_slidedeck_list' %}" class="btn btn-secondary">Cancel</a>
+</form>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends 'management/base.html' %}
+
+{% block title %}Confirm Delete{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Confirm Deletion</h1>
+</div>
+<p>Are you sure you want to delete the slide deck: <strong>{{ object.name }}</strong>?</p>
+<p class="text-danger">This will also delete all slides associated with it.</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Yes, Delete</button>
+    <a href="{% url 'slidedeck_list' %}" class="btn btn-secondary">Cancel</a>
+</form>
+{% endblock %}
