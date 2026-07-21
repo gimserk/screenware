@@ -1,24 +1,13 @@
 Create and activate a virtual environment:
 
-Bash
+
 python3 -m venv venv
 source venv/bin/activate
-Install dependencies:
-
-Bash
 pip install -r requirements.txt
-Run database migrations:
-
-Bash
 python manage.py migrate
-Create an admin account:
-
-Bash
 python manage.py createsuperuser
-Start the server (for development):
-
-Bash
 python manage.py runserver 0.0.0.0:8000
+
 Note: For production, we recommend deploying behind Nginx and Gunicorn.
 
 📺 Client Installation (Raspberry Pi)
