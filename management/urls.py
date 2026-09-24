@@ -1,32 +1,34 @@
-# management/urls.py
-
 from django.urls import path
 from django.contrib.auth import views as auth_views
 from . import views
 
 urlpatterns = [
-    # Auth
-    path('login/', auth_views.LoginView.as_view(), name='login'),
-    path('logout/', views.logout_view, name='logout'),
-    
+    # Authentication
+    path('login/', auth_views.LoginView.as_view(template_name='registration/login.html'), name='login'),
+    path('logout/', auth_views.LogoutView.as_view(), name='logout'),
+
     # Dashboard
-    path('', views.dashboard_view, name='dashboard'),
+    path('', views.dashboard, name='dashboard'),
+    path('dashboard/', views.dashboard, name='dashboard'),
 
-    # Device Management
-    path('devices/', views.DeviceListView.as_view(), name='manage_device_list'),
-    path('slidedecks/<int:deck_pk>/reorder/', views.reorder_slides_view, name='manage_slides_reorder'),
-    path('devices/<str:pk>/edit/', views.DeviceUpdateView.as_view(), name='manage_device_edit'),
-    path('devices/<str:pk>/delete/', views.DeviceDeleteView.as_view(), name='manage_device_delete'),
+    # Devices
+    path('devices/', views.device_list, name='device_list'),
+    path('devices/add/', views.device_create, name='device_create'),
+    path('devices/<int:pk>/edit/', views.device_update, name='device_update'),
+    path('devices/<int:pk>/delete/', views.device_delete, name='device_delete'),
 
-    # Slide Deck Management
-    path('slidedecks/', views.SlideDeckListView.as_view(), name='manage_slidedeck_list'),
-    path('slidedecks/new/', views.SlideDeckCreateView.as_view(), name='manage_slidedeck_new'),
-    path('slidedecks/<int:pk>/edit/', views.SlideDeckUpdateView.as_view(), name='manage_slidedeck_edit'),
-    path('slidedecks/<int:pk>/delete/', views.SlideDeckDeleteView.as_view(), name='manage_slidedeck_delete'),
+    # Slide Decks
+    path('decks/', views.slidedeck_list, name='slidedeck_list'),
+    path('decks/add/', views.slidedeck_create, name='slidedeck_create'),
+    path('decks/<int:pk>/edit/', views.slidedeck_update, name='slidedeck_update'),
+    path('decks/<int:pk>/delete/', views.slidedeck_delete, name='slidedeck_delete'),
 
-    # Individual Slide Management
-    path('slidedecks/<int:deck_pk>/slides/', views.manage_slides_view, name='manage_slides'),
-    path('slides/<int:pk>/edit/', views.SlideUpdateView.as_view(), name='manage_slide_edit'),
-    path('slides/<int:pk>/delete/', views.SlideDeleteView.as_view(), name='manage_slide_delete'),
-    path('download-script/', views.download_setup_script_view, name='download_setup_script'),
+    # Slide Management
+    path('decks/<int:pk>/slides/', views.manage_slides, name='manage_slides'),
+    path('slides/add/<int:deck_pk>/', views.slide_create, name='slide_create'),
+    path('slides/<int:pk>/edit/', views.slide_update, name='slide_update'),
+    path('slides/<int:pk>/delete/', views.slide_delete, name='slide_delete'),
+
+    # Hardware Manifest Sync Endpoint
+    path('api/device/<str:identifier>/manifest/', views.device_manifest, name='device_manifest'),
 ]

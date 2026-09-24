@@ -1,0 +1,20 @@
+[Unit]
+Description=Screenware Native Digital Signage Player
+After=systemd-timesyncd.service
+Wants=systemd-timesyncd.service
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/screenware
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/pi/.Xauthority
+ExecStart=/usr/bin/xinit /usr/bin/python3 /opt/screenware/client.py -- vt1
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target

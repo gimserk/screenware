@@ -1,16 +1,13 @@
-{% extends 'management/base.html' %}
-
-{% block title %}Confirm Delete{% endblock %}
-
+{% extends "management/base.html" %}
+{% block title %}Delete Slide Deck | Screenware{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">Confirm Deletion</h1>
+<div class="max-w-md mx-auto bg-slate-800 border border-slate-700 p-8 rounded-xl shadow text-center">
+    <h1 class="text-xl font-bold text-white mb-2">Delete Slide Deck?</h1>
+    <p class="text-sm text-slate-400 mb-6">Warning: This will permanently delete <strong>{{ deck.name }}</strong> and all of its slides.</p>
+    <form method="post" class="flex justify-center gap-3">
+        {% csrf_token %}
+        <a href="{% url 'slidedeck_list' %}" class="bg-slate-700 px-4 py-2 rounded text-sm text-slate-300">Cancel</a>
+        <button type="submit" class="bg-rose-600 hover:bg-rose-500 px-4 py-2 rounded text-sm font-semibold text-white">Confirm Delete</button>
+    </form>
 </div>
-<p>Are you sure you want to delete the slide deck: <strong>{{ object.name }}</strong>?</p>
-<p class="text-danger">This will also delete all slides associated with it.</p>
-<form method="post">
-    {% csrf_token %}
-    <button type="submit" class="btn btn-danger">Yes, Delete</button>
-    <a href="{% url 'slidedeck_list' %}" class="btn btn-secondary">Cancel</a>
-</form>
 {% endblock %}
