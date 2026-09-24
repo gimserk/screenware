@@ -1,4 +1,17 @@
+# Core Framework
 Django>=4.2,<6.0
-Pillow>=9.0.0
-requests>=2.28.0
-pygame>=2.5.0
+
+# Image & Asset Processing
+Pillow>=10.0.0
+
+# HTTP Requests & APIs (Weather, External feeds, Manifest sync)
+requests>=2.31.0
+
+# Feed & Calendar Parsing
+feedparser>=6.0.10
+python-dateutil>=2.8.2
+icalendar>=5.0.11
+
+# Production WSGI Server & Static Files
+gunicorn>=21.2.0
+whitenoise>=6.6.0

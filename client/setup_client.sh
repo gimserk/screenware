@@ -1,8 +1,7 @@
 #!/bin/bash
 # ==============================================================================
-# Screenware Standalone Python Caching Player Setup
-# Replaces legacy browser/xdotool kiosk with zero-browser Pygame engine.
-# Provides 100% autonomous recovery, local cache fallback, and modulo clock sync.
+# Screenware Standalone Python Caching Player Setup & Migration
+# Replaces legacy Chromium browser kiosk with native Pygame player.
 # ==============================================================================
 
 set -e
@@ -16,7 +15,6 @@ echo "========================================================"
 echo "    Screenware Native Player Installation & Migration   "
 echo "========================================================"
 
-# Prompt for Django Server URL
 if [ -n "$1" ]; then
     SERVER_URL="$1"
 else
@@ -28,7 +26,6 @@ if [ -z "$SERVER_URL" ]; then
     exit 1
 fi
 
-# Ensure URL has http/https protocol prefix and no trailing slash
 if [[ ! "$SERVER_URL" =~ ^https?:// ]]; then
     SERVER_URL="http://$SERVER_URL"
 fi
@@ -36,8 +33,8 @@ SERVER_URL="${SERVER_URL%/}"
 
 echo "[+] Target Django Server: $SERVER_URL"
 
-# --- 1. Clean up legacy browser-based kiosk service and cron jobs ---
-echo "[+] Cleaning legacy kiosk services and cron tasks..."
+# --- 1. Clean up legacy browser-based kiosk services and cron tasks ---
+echo "[+] Cleaning legacy browser kiosk services and cron tasks..."
 if systemctl is-active --quiet kiosk.service 2>/dev/null; then
     systemctl stop kiosk.service || true
 fi
@@ -45,8 +42,6 @@ if systemctl is-enabled --quiet kiosk.service 2>/dev/null; then
     systemctl disable kiosk.service || true
 fi
 rm -f /etc/systemd/system/kiosk.service
-
-# Remove legacy cron jobs for pi user
 crontab -u pi -r 2>/dev/null || true
 
 # --- 2. Install Required Dependencies ---
@@ -58,28 +53,34 @@ apt-get install -y python3-pygame python3-requests systemd-timesyncd xserver-xor
 systemctl enable systemd-timesyncd
 systemctl start systemd-timesyncd
 
-# Configure Xorg wrapper for non-root execution if under X11
+# Configure Xorg wrapper permissions
 cat << 'XWRAP_EOF' > /etc/X11/Xwrapper.config
 allowed_users=anybody
 needs_root_rights=yes
 XWRAP_EOF
 
-# Ensure default boot mode is graphical
+# Set default boot mode to graphical
 systemctl set-default graphical.target
 
 # --- 3. Setup Application Directories & Permissions ---
-echo "[+] Setting up /opt/screenware directories..."
+echo "[+] Setting up /opt/screenware directories and scripts..."
 mkdir -p /opt/screenware/cache/active
 mkdir -p /opt/screenware/cache/staging
 
-# Write config.json
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Deploy client scripts
+cp "$SCRIPT_DIR/client.py" /opt/screenware/client.py
+cp "$SCRIPT_DIR/start_player.sh" /opt/screenware/start_player.sh
+chmod +x /opt/screenware/client.py /opt/screenware/start_player.sh
+
+# Write server configuration
 cat << CONFIG_EOF > /opt/screenware/config.json
 {
   "server_url": "$SERVER_URL"
 }
 CONFIG_EOF
 
-# Set permissions
 chown -R pi:pi /opt/screenware
 chmod 755 /opt/screenware/cache
 chmod 755 /opt/screenware/cache/active
@@ -87,28 +88,7 @@ chmod 755 /opt/screenware/cache/staging
 
 # --- 4. Deploy Native Client Service ---
 echo "[+] Configuring systemd service (/etc/systemd/system/screenware.service)..."
-cat << 'SERVICE_EOF' > /etc/systemd/system/screenware.service
-[Unit]
-Description=Screenware Native Digital Signage Player
-After=systemd-timesyncd.service
-Wants=systemd-timesyncd.service
-
-[Service]
-Type=simple
-User=pi
-Group=pi
-WorkingDirectory=/opt/screenware
-Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/pi/.Xauthority
-ExecStart=/usr/bin/xinit /usr/bin/python3 /opt/screenware/client.py -- vt1
-Restart=always
-RestartSec=3
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=graphical.target
-SERVICE_EOF
+cp "$SCRIPT_DIR/screenware.service" /etc/systemd/system/screenware.service
 
 systemctl daemon-reload
 systemctl enable screenware.service
@@ -117,7 +97,7 @@ echo ""
 echo "========================================================"
 echo " [✓] Installation complete!"
 echo " - Configured server URL: $SERVER_URL"
-echo " - Caching directory: /opt/screenware/cache/active/"
-echo " - Native player service: screenware.service (enabled)"
-echo " To start immediately: sudo systemctl start screenware.service"
+echo " - Cache directory      : /opt/screenware/cache/active/"
+echo " - Systemd service      : screenware.service (enabled)"
+echo " To start immediately   : sudo systemctl start screenware.service"
 echo "========================================================"

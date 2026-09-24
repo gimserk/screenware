@@ -28,6 +28,7 @@ urlpatterns = [
     path('slides/add/<int:deck_pk>/', views.slide_create, name='slide_create'),
     path('slides/<int:pk>/edit/', views.slide_update, name='slide_update'),
     path('slides/<int:pk>/delete/', views.slide_delete, name='slide_delete'),
+    path('slides/reorder/', views.reorder_slides, name='reorder_slides'),
 
     # Hardware Manifest Sync Endpoint
     path('api/device/<str:identifier>/manifest/', views.device_manifest, name='device_manifest'),

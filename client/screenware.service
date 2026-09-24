@@ -10,7 +10,7 @@ Group=pi
 WorkingDirectory=/opt/screenware
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=/home/pi/.Xauthority
-ExecStart=/usr/bin/xinit /usr/bin/python3 /opt/screenware/client.py -- vt1
+ExecStart=/bin/bash /opt/screenware/start_player.sh
 Restart=always
 RestartSec=3
 StandardOutput=journal
