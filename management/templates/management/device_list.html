@@ -1,46 +1,41 @@
-{% extends 'management/base.html' %}
-
-{% block title %}Manage Devices{% endblock %}
-
+{% extends "management/base.html" %}
+{% block title %}Devices | Screenware{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">Manage Devices</h1>
-</div>
-
-<div class="table-responsive">
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>Device ID</th>
-                <th>Friendly Name</th>
-                <th>Assigned Slide Deck</th> <th>Last Seen</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for device in devices %}
-            <tr>
-                <td><code>{{ device.device_id }}</code></td>
-                <td>{{ device.name|default:"--" }}</td>
-                <td>
-                    {% if device.assigned_slidedeck %}
-                        {{ device.assigned_slidedeck.name }}
-                    {% else %}
-                        <span class="text-muted">--</span>
-                    {% endif %}
-                </td>
-                <td>{{ device.last_seen|timesince }} ago</td>
-                <td>
-                    <a href="{% url 'manage_device_edit' device.pk %}" class="btn btn-sm btn-primary">Edit</a>
-                    <a href="{% url 'manage_device_delete' device.pk %}" class="btn btn-sm btn-danger">Delete</a>
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="5" class="text-center">No devices have checked in yet.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h1 class="text-2xl font-bold text-white">Connected Devices</h1>
+        <a href="{% url 'device_create' %}" class="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
+            Add Device
+        </a>
+    </div>
+    <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+        <table class="w-full text-left text-sm text-slate-300">
+            <thead class="bg-slate-900/50 text-xs uppercase font-mono text-slate-400 border-b border-slate-700">
+                <tr>
+                    <th class="px-6 py-3">Device Name</th>
+                    <th class="px-6 py-3">Hardware ID / MAC</th>
+                    <th class="px-6 py-3">IP Address</th>
+                    <th class="px-6 py-3">Assigned Deck</th>
+                    <th class="px-6 py-3">Last Seen</th>
+                    <th class="px-6 py-3 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-700/50">
+                {% for device in devices %}
+                <tr class="hover:bg-slate-700/30">
+                    <td class="px-6 py-4 font-semibold text-white">{{ device.name }}</td>
+                    <td class="px-6 py-4 font-mono text-xs text-slate-400">{{ device.mac_address|default:device.device_id }}</td>
+                    <td class="px-6 py-4 text-xs font-mono">{{ device.ip_address|default:"--" }}</td>
+                    <td class="px-6 py-4">{{ device.assigned_slidedeck.name|default:"None" }}</td>
+                    <td class="px-6 py-4 text-xs">{{ device.last_seen|timesince|default:"Never" }} ago</td>
+                    <td class="px-6 py-4 text-right space-x-2">
+                        <a href="{% url 'device_update' device.pk %}" class="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded text-white">Edit</a>
+                        <a href="{% url 'device_delete' device.pk %}" class="text-xs bg-rose-900/60 hover:bg-rose-800 px-3 py-1.5 rounded text-rose-300">Delete</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 {% endblock %}

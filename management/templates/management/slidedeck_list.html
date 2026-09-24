@@ -1,41 +1,29 @@
-{% extends 'management/base.html' %}
-
-{% block title %}Manage Slide Decks{% endblock %}
-
+{% extends "management/base.html" %}
+{% block title %}Slide Decks | Screenware{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">Manage Slide Decks</h1>
-    <a href="{% url 'manage_slidedeck_new' %}" class="btn btn-sm btn-outline-secondary">Add New Slide Deck</a>
-</div>
-
-<div class="table-responsive">
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Slug</th>
-                <th>Last Updated</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for deck in slidedecks %}
-            <tr>
-                <td>{{ deck.name }}</td>
-                <td><code>{{ deck.slug }}</code></td>
-                <td>{{ deck.last_updated|date:"Y-m-d P" }}</td>
-                <td>
-                    <a href="{% url 'manage_slides' deck.pk %}" class="btn btn-sm btn-info">Manage Slides</a>
-                    <a href="{% url 'manage_slidedeck_edit' deck.pk %}" class="btn btn-sm btn-primary">Edit</a>
-                    <a href="{% url 'manage_slidedeck_delete' deck.pk %}" class="btn btn-sm btn-danger">Delete</a>
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="4" class="text-center">No slide decks found.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h1 class="text-2xl font-bold text-white">Slide Decks</h1>
+        <a href="{% url 'slidedeck_create' %}" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
+            New Slide Deck
+        </a>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for deck in decks %}
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 flex flex-col justify-between shadow">
+            <div>
+                <h2 class="text-lg font-bold text-white">{{ deck.name }}</h2>
+                <p class="text-xs font-mono text-slate-400 mt-1">slug: {{ deck.slug }}</p>
+                <p class="text-sm text-slate-300 mt-3">{{ deck.description|default:"No description provided." }}</p>
+                <p class="text-xs text-slate-500 mt-4"><i class="fa-solid fa-layer-group"></i> {{ deck.slides.count }} slides &bull; Updated {{ deck.last_updated|timesince }} ago</p>
+            </div>
+            <div class="flex gap-2 mt-6 pt-4 border-t border-slate-700/60">
+                <a href="{% url 'manage_slides' deck.pk %}" class="flex-grow text-center bg-cyan-600 hover:bg-cyan-500 text-white py-1.5 rounded text-xs font-semibold">Manage Slides</a>
+                <a href="{% url 'slidedeck_update' deck.pk %}" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded text-xs">Edit</a>
+                <a href="{% url 'slidedeck_delete' deck.pk %}" class="bg-rose-900/60 hover:bg-rose-800 text-rose-300 px-3 py-1.5 rounded text-xs">Delete</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
 </div>
 {% endblock %}

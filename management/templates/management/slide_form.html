@@ -1,72 +1,35 @@
-{% extends 'management/base.html' %}
-
-{% block title %}Edit Slide{% endblock %}
-
+{% extends "management/base.html" %}
+{% block title %}Edit Slide | Screenware{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">Edit Slide: {{ object.title }}</h1>
+<div class="max-w-lg mx-auto bg-slate-800 border border-slate-700 p-8 rounded-xl shadow-lg">
+    <h1 class="text-xl font-bold text-white mb-6">Edit Slide: {{ slide.title }}</h1>
+    <form method="post" enctype="multipart/form-data" class="space-y-4">
+        {% csrf_token %}
+        <div>
+            <label class="block text-xs font-mono text-slate-400 uppercase mb-1">Title</label>
+            <input type="text" name="title" value="{{ form.title.value|default:'' }}" required class="w-full bg-slate-900 border border-slate-700 rounded p-2.5 text-white">
+        </div>
+        <div>
+            <label class="block text-xs font-mono text-slate-400 uppercase mb-1">Duration (Seconds)</label>
+            <input type="number" name="duration" value="{{ form.duration.value|default:10 }}" required class="w-full bg-slate-900 border border-slate-700 rounded p-2.5 text-white">
+        </div>
+        <div>
+            <label class="block text-xs font-mono text-slate-400 uppercase mb-1">Order</label>
+            <input type="number" name="order" value="{{ form.order.value|default:0 }}" class="w-full bg-slate-900 border border-slate-700 rounded p-2.5 text-white">
+        </div>
+        <div>
+            <label class="block text-xs font-mono text-slate-400 uppercase mb-1">Image Asset</label>
+            {% if slide.image %}<p class="text-xs text-slate-400 mb-1">Current: {{ slide.image.name }}</p>{% endif %}
+            <input type="file" name="image" class="w-full text-xs text-slate-400">
+        </div>
+        <div class="flex items-center gap-2">
+            <input type="checkbox" name="active" id="active" {% if form.active.value %}checked{% endif %} class="rounded bg-slate-900">
+            <label for="active" class="text-sm text-slate-300">Active</label>
+        </div>
+        <div class="flex justify-end gap-3 pt-4">
+            <a href="{% url 'manage_slides' slide.deck.pk %}" class="bg-slate-700 px-4 py-2 rounded text-sm text-slate-300">Cancel</a>
+            <button type="submit" class="bg-cyan-600 hover:bg-cyan-500 px-5 py-2 rounded text-sm font-semibold text-white">Save</button>
+        </div>
+    </form>
 </div>
-<form method="post" enctype="multipart/form-data">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit" class="btn btn-success">Save Changes</button>
-    <a href="{% url 'manage_slides' object.slide_deck.pk %}" class="btn btn-secondary">Cancel</a>
-</form>
-
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // --- Configuration ---
-        // Maps the 'value' of the content_type dropdown to the form fields it should display.
-        // These field names match the names in your forms.py file.
-        const fieldMapping = {
-            'text': ['text_content'],
-            'image': ['image_content'],
-            'video': ['video_content'],
-            'youtube': ['youtube_video_id'],
-            'calendar': ['calendar_url', 'calendar_display_style'],
-            'weather': ['latitude', 'longitude', 'api_key'],
-            'rss': ['rss_feed_url']
-        };
-
-        // --- Get All Content-Specific Fields ---
-        // This creates a unique list of all fields that can be toggled.
-        const allContentFields = [...new Set([].concat(...Object.values(fieldMapping)))];
-
-        // --- Get a reference to the dropdown menu ---
-        const contentTypeSelect = document.getElementById('id_content_type');
-
-        function toggleFields() {
-            // Get the currently selected content type
-            const selectedType = contentTypeSelect.value;
-            // Get the list of fields that should be visible for the selected type
-            const fieldsToShow = fieldMapping[selectedType] || [];
-
-            // Loop through ALL possible content fields
-            allContentFields.forEach(fieldName => {
-                // Find the input/select/textarea element by its Django-generated ID
-                const fieldElement = document.getElementById(`id_${fieldName}`);
-                if (fieldElement) {
-                    // Find the parent <p> tag that Django creates with form.as_p
-                    const parentPara = fieldElement.closest('p');
-                    if (parentPara) {
-                        // Show or hide the entire paragraph (label + input)
-                        if (fieldsToShow.includes(fieldName)) {
-                            parentPara.style.display = ''; // Show the element
-                        } else {
-                            parentPara.style.display = 'none'; // Hide the element
-                        }
-                    }
-                }
-            });
-        }
-
-        // --- Event Listener ---
-        // Add an event listener that calls toggleFields whenever the dropdown value changes.
-        contentTypeSelect.addEventListener('change', toggleFields);
-
-        // --- Initial Call ---
-        // Call the function once when the page loads to set the correct initial state.
-        toggleFields();
-    });
-</script>
 {% endblock %}

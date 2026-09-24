@@ -1,16 +1,26 @@
-{% extends 'management/base.html' %}
-
-{% block title %}{% if object %}Edit Slide Deck{% else %}New Slide Deck{% endif %}{% endblock %}
-
+{% extends "management/base.html" %}
+{% block title %}{{ title }} | Screenware{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">{% if object %}Edit Slide Deck{% else %}Create New Slide Deck{% endif %}</h1>
+<div class="max-w-lg mx-auto bg-slate-800 border border-slate-700 p-8 rounded-xl shadow-lg">
+    <h1 class="text-xl font-bold text-white mb-6">{{ title }}</h1>
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <div>
+            <label class="block text-xs font-mono text-slate-400 uppercase mb-1">Deck Name</label>
+            <input type="text" name="name" value="{{ form.name.value|default:'' }}" required class="w-full bg-slate-900 border border-slate-700 rounded p-2.5 text-white focus:border-indigo-500 outline-none">
+        </div>
+        <div>
+            <label class="block text-xs font-mono text-slate-400 uppercase mb-1">Slug</label>
+            <input type="text" name="slug" value="{{ form.slug.value|default:'' }}" required class="w-full bg-slate-900 border border-slate-700 rounded p-2.5 text-white font-mono text-sm focus:border-indigo-500 outline-none">
+        </div>
+        <div>
+            <label class="block text-xs font-mono text-slate-400 uppercase mb-1">Description</label>
+            <textarea name="description" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded p-2.5 text-white text-sm focus:border-indigo-500 outline-none">{{ form.description.value|default:'' }}</textarea>
+        </div>
+        <div class="flex justify-end gap-3 pt-4">
+            <a href="{% url 'slidedeck_list' %}" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm text-slate-300">Cancel</a>
+            <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 px-5 py-2 rounded text-sm font-semibold text-white">Save</button>
+        </div>
+    </form>
 </div>
-
-<form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit" class="btn btn-success">Save</button>
-    <a href="{% url 'manage_slidedeck_list' %}" class="btn btn-secondary">Cancel</a>
-</form>
 {% endblock %}

@@ -1,385 +1,210 @@
-# management/views.py
-
-from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth import logout
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.utils import timezone
-from django.http import HttpResponse
-from django.urls import reverse_lazy
-from django.views.generic import ListView, CreateView, UpdateView, DeleteView
-from datetime import timedelta
 import json
-from django.http import JsonResponse
-from django.db import transaction
+import hashlib
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse, Http404
+from django.db.models import Q
+from django.utils import timezone
+from slideshow.models import SlideDeck, Slide, Device
+from .forms import SlideDeckForm, SlideForm, DeviceForm
 
-from .forms import SlideForm
-from slideshow.models import Device, SlideDeck, Slide
-
-# --- Dashboard View ---
 @login_required
-def dashboard_view(request):
-    devices = Device.objects.all().order_by('-last_seen')
-    
-    for device in devices:
-        device.is_online = (timezone.now() - device.last_seen) < timedelta(minutes=5)
+def dashboard(request):
+    devices = Device.objects.all()
+    decks = SlideDeck.objects.all()
+    return render(request, 'management/dashboard.html', {
+        'devices': devices,
+        'decks': decks
+    })
 
-    return render(request, 'management/dashboard.html', {'devices': devices})
-
-def logout_view(request):
-    logout(request)
-    return redirect('login')
-
-# --- Device Management Views ---
-class DeviceListView(LoginRequiredMixin, ListView):
-    model = Device
-    template_name = 'management/device_list.html'
-    context_object_name = 'devices'
-
-class DeviceUpdateView(LoginRequiredMixin, UpdateView):
-    model = Device
-    fields = ['name', 'assigned_slidedeck']
-    template_name = 'management/device_form.html'
-    success_url = reverse_lazy('dashboard')
-
-class DeviceDeleteView(LoginRequiredMixin, DeleteView):
-    model = Device
-    template_name = 'management/device_confirm_delete.html'
-    success_url = reverse_lazy('manage_device_list')
-
-# --- Slide Deck Management Views ---
-class SlideDeckListView(LoginRequiredMixin, ListView):
-    model = SlideDeck
-    template_name = 'management/slidedeck_list.html'
-    context_object_name = 'slidedecks'
-
-class SlideDeckCreateView(LoginRequiredMixin, CreateView):
-    model = SlideDeck
-    fields = ['name', 'slug']
-    template_name = 'management/slidedeck_form.html' 
-    success_url = reverse_lazy('manage_slidedeck_list')
-
-class SlideDeckUpdateView(LoginRequiredMixin, UpdateView):
-    model = SlideDeck
-    fields = ['name', 'slug']
-    template_name = 'management/slidedeck_form.html'
-    success_url = reverse_lazy('manage_slidedeck_list')
-
-class SlideDeckDeleteView(LoginRequiredMixin, DeleteView):
-    model = SlideDeck
-    template_name = 'management/slidedeck_confirm_delete.html'
-    success_url = reverse_lazy('manage_slidedeck_list')
-
-# --- Slide Management Views ---
 @login_required
-def manage_slides_view(request, deck_pk):
-    slidedeck = get_object_or_404(SlideDeck, pk=deck_pk)
-    
+def device_list(request):
+    devices = Device.objects.all()
+    return render(request, 'management/device_list.html', {'devices': devices})
+
+@login_required
+def device_create(request):
+    if request.method == 'POST':
+        form = DeviceForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('device_list')
+    else:
+        form = DeviceForm()
+    return render(request, 'management/device_form.html', {'form': form, 'title': 'Add Device'})
+
+@login_required
+def device_update(request, pk):
+    device = get_object_or_404(Device, pk=pk)
+    if request.method == 'POST':
+        form = DeviceForm(request.POST, instance=device)
+        if form.is_valid():
+            form.save()
+            return redirect('device_list')
+    else:
+        form = DeviceForm(instance=device)
+    return render(request, 'management/device_form.html', {'form': form, 'title': 'Edit Device'})
+
+@login_required
+def device_delete(request, pk):
+    device = get_object_or_404(Device, pk=pk)
+    if request.method == 'POST':
+        device.delete()
+        return redirect('device_list')
+    return render(request, 'management/device_confirm_delete.html', {'device': device})
+
+@login_required
+def slidedeck_list(request):
+    decks = SlideDeck.objects.all()
+    return render(request, 'management/slidedeck_list.html', {'decks': decks})
+
+@login_required
+def slidedeck_create(request):
+    if request.method == 'POST':
+        form = SlideDeckForm(request.POST)
+        if form.is_valid():
+            deck = form.save()
+            return redirect('manage_slides', pk=deck.pk)
+    else:
+        form = SlideDeckForm()
+    return render(request, 'management/slidedeck_form.html', {'form': form, 'title': 'New Slide Deck'})
+
+@login_required
+def slidedeck_update(request, pk):
+    deck = get_object_or_404(SlideDeck, pk=pk)
+    if request.method == 'POST':
+        form = SlideDeckForm(request.POST, instance=deck)
+        if form.is_valid():
+            form.save()
+            return redirect('slidedeck_list')
+    else:
+        form = SlideDeckForm(instance=deck)
+    return render(request, 'management/slidedeck_form.html', {'form': form, 'title': 'Edit Slide Deck'})
+
+@login_required
+def slidedeck_delete(request, pk):
+    deck = get_object_or_404(SlideDeck, pk=pk)
+    if request.method == 'POST':
+        deck.delete()
+        return redirect('slidedeck_list')
+    return render(request, 'management/slidedeck_confirm_delete.html', {'deck': deck})
+
+@login_required
+def manage_slides(request, pk):
+    deck = get_object_or_404(SlideDeck, pk=pk)
+    slides = deck.slides.all().order_by('order')
+    form = SlideForm()
+    return render(request, 'management/manage_slides.html', {
+        'deck': deck,
+        'slides': slides,
+        'form': form
+    })
+
+@login_required
+def slide_create(request, deck_pk):
+    deck = get_object_or_404(SlideDeck, pk=deck_pk)
     if request.method == 'POST':
         form = SlideForm(request.POST, request.FILES)
         if form.is_valid():
-            new_slide = form.save(commit=False)
-            new_slide.slide_deck = slidedeck
-            new_slide.save()
-            return redirect('manage_slides', deck_pk=slidedeck.pk)
-    else:
-        form = SlideForm()
-
-    slides = slidedeck.slides.all().order_by('order')
-    context = {
-        'slidedeck': slidedeck,
-        'slides': slides,
-        'form': form,
-    }
-    return render(request, 'management/manage_slides.html', context)
-
-class SlideUpdateView(LoginRequiredMixin, UpdateView):
-    model = Slide
-    form_class = SlideForm
-    template_name = 'management/slide_form.html'
-
-    def get_success_url(self):
-        return reverse_lazy('manage_slides', kwargs={'deck_pk': self.object.slide_deck.pk})
-
-class SlideDeleteView(LoginRequiredMixin, DeleteView):
-    model = Slide
-    template_name = 'management/slide_confirm_delete.html'
-    
-    def get_success_url(self):
-        return reverse_lazy('manage_slides', kwargs={'deck_pk': self.object.slide_deck.pk})
+            slide = form.save(commit=False)
+            slide.deck = deck
+            slide.save()
+            deck.save()
+            return redirect('manage_slides', pk=deck.pk)
+    return redirect('manage_slides', pk=deck.pk)
 
 @login_required
-@transaction.atomic
-def reorder_slides_view(request, deck_pk):
-    """
-    Receives a POST request with the new order of slides and updates the database.
-    """
+def slide_update(request, pk):
+    slide = get_object_or_404(Slide, pk=pk)
     if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            new_order_pks = data.get('new_order', [])
-            
-            # Update the order for each slide
-            for index, pk in enumerate(new_order_pks):
-                Slide.objects.filter(pk=pk, slide_deck_id=deck_pk).update(order=index)
-            
-            return JsonResponse({'status': 'success', 'message': 'Slide order updated successfully.'})
-        except Exception as e:
-            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
-    return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)
+        form = SlideForm(request.POST, request.FILES, instance=slide)
+        if form.is_valid():
+            form.save()
+            slide.deck.save()
+            return redirect('manage_slides', pk=slide.deck.pk)
+    else:
+        form = SlideForm(instance=slide)
+    return render(request, 'management/slide_form.html', {'form': form, 'slide': slide})
 
 @login_required
-def download_setup_script_view(request):
+def slide_delete(request, pk):
+    slide = get_object_or_404(Slide, pk=pk)
+    deck_pk = slide.deck.pk
+    if request.method == 'POST':
+        slide.delete()
+        SlideDeck.objects.filter(pk=deck_pk).update(last_updated=timezone.now())
+        return redirect('manage_slides', pk=deck_pk)
+    return render(request, 'management/slide_confirm_delete.html', {'slide': slide})
+
+def device_manifest(request, identifier):
     """
-    This view serves the complete, self-updating setup_kiosk.sh script 
-    as a downloadable file.
+    Delivers a deterministic JSON manifest containing active slide metadata,
+    duration specifications, wall-clock epoch anchor, and an atomic SHA-256 version hash.
+    Accepts MAC address (colon/hyphen delimited) or hardware device ID.
     """
-    # Using a raw triple-quoted string (r"""...""") to preserve all special characters.
-    script_content = r"""#!/bin/bash
+    norm_id = identifier.replace('-', ':').upper()
 
-# SCREENWARE KIOSK INSTALLER - FIXED DEPENDENCY LOGIC
-# Prioritizes 'chromium' over 'chromium-browser' for Debian Trixie/Bookworm compliance.
+    device = Device.objects.filter(
+        Q(mac_address__iexact=norm_id) |
+        Q(mac_address__iexact=identifier) |
+        Q(device_id__iexact=norm_id) |
+        Q(device_id__iexact=identifier)
+    ).first()
 
-set -e
+    if not device and identifier.isdigit():
+        device = Device.objects.filter(pk=int(identifier)).first()
 
-INSTALL_DIR="/opt/screenware"
+    if not device:
+        return JsonResponse({"error": "Device not found"}, status=404)
 
-echo "=================================================="
-echo "      Screenware Kiosk Setup (Trixie/Bookworm)    "
-echo "=================================================="
+    # Touch device last_seen timestamp as a passive heartbeat
+    if hasattr(device, 'last_seen'):
+        device.last_seen = timezone.now()
+        device.save(update_fields=['last_seen'])
 
-# --- 1. Gather Configuration ---
-if [ ! -f "$INSTALL_DIR/config.json" ]; then
-    read -p "Enter Django Server IP (e.g., 192.168.1.50:8000): " SERVER_IP
-    read -p "Enter Initial Slide Deck Slug: " DECK_SLUG
-else
-    echo "Existing configuration found. Preserving..."
-    SERVER_IP=$(grep -oP '"server": "\K[^"]+' $INSTALL_DIR/config.json || echo "127.0.0.1")
-    DECK_SLUG=$(grep -oP '"slug": "\K[^"]+' $INSTALL_DIR/config.json || echo "default")
-fi
+    deck = getattr(device, 'assigned_slidedeck', None) or getattr(device, 'slide_deck', None)
+    if not deck:
+        return JsonResponse({
+            "version_hash": "",
+            "deck_start_epoch": 0,
+            "total_duration": 0,
+            "slides": [],
+            "server_time": timezone.now().timestamp()
+        })
 
-# --- 2. Robust Dependency Installation ---
-echo "--- Detecting Browser Package ---"
-apt-get update
+    slides_qs = deck.slides.filter(active=True).order_by('order')
 
-# Logic: Check if 'chromium' exists and has an installation candidate. 
-# This fixes the issue where 'chromium-browser' exists as a dummy package but can't be installed.
-if apt-cache policy chromium | grep -q "Candidate:"; then
-    echo "Detected modern package: chromium"
-    BROWSER_PKG="chromium"
-else
-    echo "Falling back to legacy package: chromium-browser"
-    BROWSER_PKG="chromium-browser"
-fi
+    slide_data = []
+    total_duration = 0
 
-echo "--- Installing Dependencies ($BROWSER_PKG) ---"
-# We add --fix-missing to handle potential repo sync issues
-apt-get install -y cage $BROWSER_PKG python3-requests python3-venv fonts-liberation --fix-missing
+    for slide in slides_qs:
+        duration = getattr(slide, 'duration', 10) or 10
+        total_duration += duration
 
-# Locate the binary path for Python script
-if [ -f "/usr/bin/chromium" ]; then
-    BROWSER_BIN="/usr/bin/chromium"
-elif [ -f "/usr/bin/chromium-browser" ]; then
-    BROWSER_BIN="/usr/bin/chromium-browser"
-else
-    # Fallback search
-    BROWSER_BIN=$(command -v chromium || command -v chromium-browser)
-fi
+        image_field = getattr(slide, 'image', None)
+        media_url = ""
+        filename = ""
+        if image_field and bool(image_field):
+            media_url = request.build_absolute_uri(image_field.url)
+            filename = image_field.name.split('/')[-1]
 
-if [ -z "$BROWSER_BIN" ]; then
-    echo "CRITICAL ERROR: Could not locate chromium binary after install."
-    exit 1
-fi
-echo "Browser binary confirmed at: $BROWSER_BIN"
+        slide_data.append({
+            "id": slide.id,
+            "url": media_url,
+            "filename": filename,
+            "duration": duration,
+            "order": getattr(slide, 'order', 0),
+            "content_type": getattr(slide, 'content_type', 'image')
+        })
 
-# --- 3. System Cleanup ---
-echo "--- Cleaning up conflicting display services ---"
-systemctl stop lightdm 2>/dev/null || true
-systemctl disable lightdm 2>/dev/null || true
-systemctl stop gdm3 2>/dev/null || true
-systemctl disable gdm3 2>/dev/null || true
+    hash_payload = json.dumps(slide_data, sort_keys=True)
+    version_hash = hashlib.sha256(hash_payload.encode('utf-8')).hexdigest()
 
-echo "--- Disabling Boot Splash ---"
-if grep -q "splash" /boot/firmware/cmdline.txt 2>/dev/null; then
-    sed -i 's/splash//g' /boot/firmware/cmdline.txt
-fi
-if grep -q "quiet" /boot/firmware/cmdline.txt 2>/dev/null; then
-    sed -i 's/quiet//g' /boot/firmware/cmdline.txt
-fi
-
-# --- 4. Setup Directories ---
-mkdir -p "$INSTALL_DIR"
-
-# --- 5. Create Offline Page ---
-cat <<EOF > "$INSTALL_DIR/offline.html"
-<!DOCTYPE html>
-<html>
-<head>
-<style>
-  body { background-color: #000; color: #fff; font-family: sans-serif; 
-         display: flex; justify-content: center; align-items: center; height: 100vh; text-align: center; }
-  h1 { font-size: 4em; color: #e74c3c; margin-bottom: 0.2em;}
-  p { font-size: 2em; color: #aaa; }
-</style>
-</head>
-<body>
-  <div>
-    <h1>Connection Lost</h1>
-    <p>Waiting for Screenware Server...</p>
-  </div>
-</body>
-</html>
-EOF
-
-# --- 6. Create Guardian Script ---
-cat <<EOF > "$INSTALL_DIR/guardian.py"
-#!/usr/bin/python3
-import time, requests, subprocess, os, signal, sys, json
-
-# Configuration
-SERVER_IP = "$SERVER_IP"
-CONFIG_FILE = "$INSTALL_DIR/config.json"
-OFFLINE_URL = "file://$INSTALL_DIR/offline.html"
-BROWSER_BIN = "$BROWSER_BIN" 
-
-# Initialize Config
-if not os.path.exists(CONFIG_FILE):
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump({"slug": "$DECK_SLUG", "server": SERVER_IP}, f)
-
-def get_config():
-    with open(CONFIG_FILE, 'r') as f: return json.load(f)
-
-def save_config(data):
-    with open(CONFIG_FILE, 'w') as f: json.dump(data, f)
-
-def get_device_serial():
-    try:
-        with open('/proc/cpuinfo', 'r') as f:
-            for line in f:
-                if line.startswith('Serial'): return line.split(':')[1].strip()
-    except: return "unknown_pi"
-
-def check_connection(server_ip):
-    try:
-        requests.get(f"http://{server_ip}", timeout=5)
-        return True
-    except: return False
-
-def get_server_assignment(server_ip, current_slug):
-    url = f"http://{server_ip}/api/heartbeat/"
-    serial = get_device_serial()
-    try:
-        resp = requests.post(url, json={"device_id": serial}, timeout=5)
-        if resp.status_code == 200:
-            return resp.json().get("assigned_slidedeck_slug", current_slug)
-    except: pass
-    return current_slug
-
-def launch_browser(url):
-    cmd = [
-        "/usr/bin/cage",
-        "--", 
-        BROWSER_BIN,
-        "--kiosk",
-        "--noerrdialogs",
-        "--disable-infobars",
-        "--no-sandbox",
-        "--disable-gpu-compositing",
-        "--user-data-dir=/tmp/chromium-kiosk-profile",
-        url
-    ]
-    log_file = open('$INSTALL_DIR/browser.log', 'w')
-    return subprocess.Popen(cmd, stdout=log_file, stderr=log_file)
-
-def main():
-    print("--- Guardian Started ---")
-    
-    config = get_config()
-    current_slug = config.get('slug', 'default')
-    server_ip = config.get('server', '127.0.0.1')
-    
-    is_online = check_connection(server_ip)
-    
-    if is_online:
-        target_url = f"http://{server_ip}/deck/{current_slug}/"
-    else:
-        target_url = OFFLINE_URL
-
-    print(f"Launching: {target_url}")
-    browser_process = launch_browser(target_url)
-
-    while True:
-        try:
-            time.sleep(10)
-            
-            if browser_process.poll() is not None:
-                print("Browser process died. Restarting loop.")
-                break 
-
-            now_online = check_connection(server_ip)
-            if is_online != now_online:
-                print("Network state changed. Rebooting browser.")
-                break
-
-            if now_online:
-                new_slug = get_server_assignment(server_ip, current_slug)
-                if new_slug != current_slug:
-                    print(f"Slug changed to {new_slug}. Saving and restarting.")
-                    config['slug'] = new_slug
-                    save_config(config)
-                    break 
-
-        except KeyboardInterrupt:
-            browser_process.terminate()
-            sys.exit(0)
-        except Exception as e:
-            print(f"Error: {e}")
-            time.sleep(5)
-
-    print("Terminating browser...")
-    browser_process.terminate()
-    try: browser_process.wait(timeout=5)
-    except: browser_process.kill()
-    sys.exit(0)
-
-if __name__ == "__main__":
-    main()
-EOF
-
-# --- 7. Create Systemd Service ---
-echo "--- Creating Systemd Service ---"
-cat <<EOF > /etc/systemd/system/screenware.service
-[Unit]
-Description=Screenware Kiosk Guardian (Root)
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-User=root
-Group=root
-Environment=XDG_RUNTIME_DIR=/run/user/0
-Environment=WLR_LIBINPUT_NO_DEVICES=1
-ExecStartPre=/bin/mkdir -p /run/user/0
-ExecStartPre=/bin/chmod 700 /run/user/0
-ExecStart=/usr/bin/python3 $INSTALL_DIR/guardian.py
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# --- 8. Finalize ---
-chmod +x "$INSTALL_DIR/guardian.py"
-systemctl daemon-reload
-systemctl enable screenware.service
-
-echo "=================================================="
-echo "Setup Complete! Rebooting in 5 seconds..."
-echo "=================================================="
-sleep 5
-reboot"""
-    response = HttpResponse(script_content, content_type='text/x-shellscript')
-    response['Content-Disposition'] = 'attachment; filename="setup_kiosk.sh"'
-    return response
+    response_data = {
+        "version_hash": version_hash,
+        "deck_start_epoch": 0,
+        "total_duration": total_duration,
+        "slides": slide_data,
+        "server_time": timezone.now().timestamp()
+    }
+    return JsonResponse(response_data)

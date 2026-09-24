@@ -1,23 +1,18 @@
-# bulletin_board/slideshow/admin.py
-
 from django.contrib import admin
-from .models import SlideDeck, Slide
+from .models import SlideDeck, Slide, Device
 
-class SlideInline(admin.TabularInline):
-    model = Slide
-    extra = 1
-    # The 'youtube_video_id' field is now included here
-    fields = ('title', 'content_type', 'text_content', 'image_content', 'video_content', 'youtube_video_id', 'calendar_url', 'duration', 'order')
-
-
+@admin.register(SlideDeck)
 class SlideDeckAdmin(admin.ModelAdmin):
+    list_display = ('name', 'slug', 'last_updated')
     prepopulated_fields = {'slug': ('name',)}
-    inlines = [SlideInline]
-    list_display = ('name', 'slug')
-
-admin.site.register(SlideDeck, SlideDeckAdmin)
 
 @admin.register(Slide)
 class SlideAdmin(admin.ModelAdmin):
-    list_display = ('title', 'slide_deck', 'content_type', 'order', 'duration')
-    list_filter = ('slide_deck', 'content_type')
+    list_display = ('title', 'deck', 'content_type', 'duration', 'order', 'active')
+    list_filter = ('deck', 'content_type', 'active')
+    ordering = ('deck', 'order')
+
+@admin.register(Device)
+class DeviceAdmin(admin.ModelAdmin):
+    list_display = ('name', 'device_id', 'mac_address', 'assigned_slidedeck', 'last_seen', 'is_online')
+    list_filter = ('assigned_slidedeck',)
