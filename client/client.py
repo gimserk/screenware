@@ -1,10 +1,21 @@
 #!/usr/bin/env python3
+"""
+Screenware Native Signage Client
+- Direct Pygame framebuffer rendering (bypasses browser, eliminating memory leaks & tab freezes).
+- Modulo wall-clock time sync: (now - 0) % total_duration eliminates screen drift.
+- Two-stage atomic cache: Staging downloads -> Verified promote to active cache.
+- Standby diagnostics display when unassigned.
+- Native Text & Image slide support.
+- Fully resilient against network severance and cold reboots.
+"""
+
 import os
 import sys
 import time
 import json
 import uuid
 import shutil
+import socket
 import threading
 import requests
 
@@ -24,11 +35,14 @@ current_manifest = {
     "version_hash": "",
     "deck_start_epoch": 0,
     "total_duration": 0,
-    "slides": []
+    "slides": [],
+    "status": "initializing"
 }
 
 def load_server_url():
-    """Loads server base URL from config file or defaults."""
+    """Loads server base URL from config file, environment variable, or defaults."""
+    if "SCREENWARE_SERVER_URL" in os.environ:
+        return os.environ["SCREENWARE_SERVER_URL"].rstrip("/")
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r") as f:
@@ -44,7 +58,7 @@ def get_hardware_identifier():
     Checks physical eth0/wlan0 interfaces, CPU serial from /proc/cpuinfo,
     or falls back to uuid.getnode.
     """
-    for iface in ["eth0", "wlan0", "end0"]:
+    for iface in ["eth0", "wlan0", "end0", "en0"]:
         addr_path = f"/sys/class/net/{iface}/address"
         if os.path.exists(addr_path):
             try:
@@ -67,8 +81,19 @@ def get_hardware_identifier():
     mac = ':'.join(['{:02x}'.format((node >> ele) & 0xff) for ele in range(0, 8 * 6, 8)][::-1])
     return mac.upper()
 
+def get_local_ip():
+    """Discovers the active local IP address."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
 def load_cached_manifest():
-    """Loads previous manifest from disk on cold start (supports offline playback)."""
+    """Loads previous manifest from disk on cold start (enables immediate offline playback)."""
     global current_manifest
     if os.path.exists(MANIFEST_FILE):
         try:
@@ -76,9 +101,9 @@ def load_cached_manifest():
                 data = json.load(f)
                 with manifest_lock:
                     current_manifest = data
-            print(f"Loaded cached manifest with version: {current_manifest.get('version_hash')}")
+            print(f"[+] Loaded cached manifest with version: {current_manifest.get('version_hash')}")
         except Exception as e:
-            print(f"Error loading cached manifest: {e}")
+            print(f"[-] Error loading cached manifest: {e}")
 
 def save_manifest_to_disk(manifest_data):
     """Atomically commits manifest to disk using tmp file swap."""
@@ -99,28 +124,29 @@ def prune_orphan_cache(active_filenames):
                     except OSError:
                         pass
     except Exception as e:
-        print(f"Cache prune warning: {e}")
+        print(f"[-] Cache prune warning: {e}")
 
 def sync_worker():
     """
-    Background daemon:
-    - Polls server manifest endpoint.
-    - Compares version_hash with local hash.
+    Background daemon thread:
+    - Polls server manifest endpoint with local IP in header.
+    - Compares remote version_hash with local hash.
     - On mismatch, downloads new assets into staging/ directory.
     - Promotes staging/ to active/ only when 100% verified.
     - Tolerates network disconnects, socket timeouts, and DNS drops silently.
     """
     global current_manifest
-    server_url = load_server_url()
     hw_id = get_hardware_identifier()
-    manifest_url = f"{server_url}/api/device/{hw_id}/manifest/"
 
-    print(f"Background sync worker started for hardware ID [{hw_id}]")
-    print(f"Target manifest URL: {manifest_url}")
+    print(f"[+] Sync worker active for hardware ID: [{hw_id}]")
 
     while True:
+        server_url = load_server_url()
+        manifest_url = f"{server_url}/api/device/{hw_id}/manifest/"
+        headers = {"X-Client-IP": get_local_ip()}
+
         try:
-            resp = requests.get(manifest_url, timeout=10)
+            resp = requests.get(manifest_url, headers=headers, timeout=10)
             if resp.status_code == 200:
                 remote_manifest = resp.json()
                 remote_hash = remote_manifest.get("version_hash", "")
@@ -130,13 +156,13 @@ def sync_worker():
                     local_hash = current_manifest.get("version_hash", "")
 
                 if remote_hash and remote_hash != local_hash:
-                    print(f"New configuration detected. Syncing version {remote_hash}")
+                    print(f"[+] Update detected. Syncing new version: {remote_hash}")
 
                     # 1. Reset staging directory
                     shutil.rmtree(STAGING_DIR, ignore_errors=True)
                     os.makedirs(STAGING_DIR, exist_ok=True)
 
-                    # 2. Download all slides to staging
+                    # 2. Download all slide assets to staging
                     all_downloaded = True
                     active_filenames = set()
 
@@ -149,13 +175,13 @@ def sync_worker():
                         active_filenames.add(filename)
                         dest_path = os.path.join(STAGING_DIR, filename)
 
-                        # If already in active cache with non-zero size, copy over
+                        # If already in active cache with valid size, copy over directly
                         active_path = os.path.join(CACHE_DIR, filename)
                         if os.path.exists(active_path) and os.path.getsize(active_path) > 0:
                             shutil.copy2(active_path, dest_path)
                             continue
 
-                        # Otherwise stream download from server
+                        # Stream download asset
                         try:
                             r = requests.get(media_url, stream=True, timeout=15)
                             if r.status_code == 200:
@@ -169,44 +195,48 @@ def sync_worker():
                                 all_downloaded = False
                                 break
                         except Exception as dl_err:
-                            print(f"Download failed for {filename}: {dl_err}")
+                            print(f"[-] Download error for {filename}: {dl_err}")
                             all_downloaded = False
                             break
 
                     # 3. Promote staging to active atomically
-                    if all_downloaded and slides:
+                    if all_downloaded:
                         for filename in os.listdir(STAGING_DIR):
                             src = os.path.join(STAGING_DIR, filename)
                             dst = os.path.join(CACHE_DIR, filename)
                             shutil.copy2(src, dst)
 
-                        # Prune obsolete files from active cache
                         prune_orphan_cache(active_filenames)
-
-                        # Commit new manifest
                         save_manifest_to_disk(remote_manifest)
+
                         with manifest_lock:
                             current_manifest = remote_manifest
-                        print(f"Sync complete. Active cache updated to version {remote_hash}")
+                        print(f"[✓] Sync successful. Active cache updated to version {remote_hash}")
                     else:
-                        print("Update aborted: Asset download incomplete. Retaining previous loop.")
+                        print("[-] Asset download incomplete. Retaining previous active cache.")
+                elif not remote_hash and remote_manifest.get("status") == "unassigned":
+                    # Display unassigned status
+                    with manifest_lock:
+                        current_manifest["status"] = "unassigned"
+                        current_manifest["device_name"] = remote_manifest.get("device_name", "")
         except Exception:
-            # Network drops, DNS fails, and socket errors silently pass without interrupting playback
+            # Network severed, DNS failures, or timeouts pass silently
             pass
 
         time.sleep(POLL_INTERVAL)
 
 def run_display():
     """
-    Main thread:
+    Main display thread:
     - Direct Pygame display controller.
     - Zero browser overhead, zero memory leaks.
     - Deterministic modulo wall-clock lookup ensures perfect multi-screen synchronization.
+    - Built-in standby diagnostic view and text slide support.
     """
     import pygame
 
-    # Initialize Pygame display
     pygame.init()
+    pygame.font.init()
     pygame.mouse.set_visible(False)
 
     screen = None
@@ -224,8 +254,13 @@ def run_display():
     screen_w, screen_h = screen.get_size()
     clock = pygame.time.Clock()
 
+    title_font = pygame.font.SysFont("sans-serif", int(screen_h * 0.055), bold=True)
+    body_font = pygame.font.SysFont("sans-serif", int(screen_h * 0.038))
+    mono_font = pygame.font.SysFont("monospace", int(screen_h * 0.028))
+
     loaded_surfaces = {}
-    current_slide_filename = None
+    current_slide_id = None
+    hw_id = get_hardware_identifier()
 
     def scale_surface(img_surf):
         img_w, img_h = img_surf.get_size()
@@ -240,15 +275,80 @@ def run_display():
         frame.blit(scaled_img, (offset_x, offset_y))
         return frame
 
-    print(f"Display loop initialized at {screen_w}x{screen_h}")
+    def render_text_slide(title, body):
+        surf = pygame.Surface((screen_w, screen_h))
+        surf.fill((15, 23, 42))  # Dark Slate-900
+
+        # Title bar
+        t_render = title_font.render(title, True, (56, 189, 248))  # Sky-400
+        surf.blit(t_render, (int(screen_w * 0.08), int(screen_h * 0.12)))
+
+        # Divider line
+        pygame.draw.line(
+            surf, (51, 65, 85),
+            (int(screen_w * 0.08), int(screen_h * 0.20)),
+            (int(screen_w * 0.92), int(screen_h * 0.20)),
+            2
+        )
+
+        # Word-wrapped body text
+        words = body.split()
+        lines = []
+        curr_line = []
+        max_w = int(screen_w * 0.84)
+
+        for word in words:
+            test_line = " ".join(curr_line + [word])
+            if body_font.size(test_line)[0] < max_w:
+                curr_line.append(word)
+            else:
+                if curr_line:
+                    lines.append(" ".join(curr_line))
+                curr_line = [word]
+        if curr_line:
+            lines.append(" ".join(curr_line))
+
+        y_pos = int(screen_h * 0.25)
+        line_height = int(body_font.get_linesize() * 1.4)
+        for line in lines[:10]:
+            l_render = body_font.render(line, True, (241, 245, 249))
+            surf.blit(l_render, (int(screen_w * 0.08), y_pos))
+            y_pos += line_height
+
+        return surf
+
+    def render_standby_screen():
+        surf = pygame.Surface((screen_w, screen_h))
+        surf.fill((10, 15, 30))
+
+        h1 = title_font.render("SCREENWARE SIGNAGE", True, (56, 189, 248))
+        surf.blit(h1, (int(screen_w * 0.08), int(screen_h * 0.20)))
+
+        sub = body_font.render("Display Ready & Waiting for Assignment", True, (148, 163, 184))
+        surf.blit(sub, (int(screen_w * 0.08), int(screen_h * 0.28)))
+
+        ip = get_local_ip()
+        server_url = load_server_url()
+
+        id_text = mono_font.render(f"Hardware ID (MAC): {hw_id}", True, (226, 232, 240))
+        ip_text = mono_font.render(f"Local IP Address : {ip}", True, (226, 232, 240))
+        srv_text = mono_font.render(f"Server Host      : {server_url}", True, (226, 232, 240))
+
+        box_y = int(screen_h * 0.40)
+        pygame.draw.rect(surf, (30, 41, 59), (int(screen_w * 0.08), box_y, int(screen_w * 0.65), int(screen_h * 0.25)), border_radius=8)
+        surf.blit(id_text, (int(screen_w * 0.10), box_y + int(screen_h * 0.04)))
+        surf.blit(ip_text, (int(screen_w * 0.10), box_y + int(screen_h * 0.10)))
+        surf.blit(srv_text, (int(screen_w * 0.10), box_y + int(screen_h * 0.16)))
+
+        foot = mono_font.render("Assign this screen to a Slide Deck from the Screenware Web Dashboard.", True, (100, 116, 139))
+        surf.blit(foot, (int(screen_w * 0.08), int(screen_h * 0.72)))
+        return surf
+
+    print(f"[+] Display loop running: {screen_w}x{screen_h}")
 
     while True:
-        # Check event queue for exit signals
         for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                return
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 pygame.quit()
                 return
 
@@ -257,18 +357,17 @@ def run_display():
             total_duration = current_manifest.get("total_duration", 0)
             epoch_anchor = current_manifest.get("deck_start_epoch", 0)
 
-        # If no slides available yet, show black screen
+        # Show standby screen if unassigned or no slides
         if not slides or total_duration <= 0:
-            screen.fill((0, 0, 0))
+            screen.blit(render_standby_screen(), (0, 0))
             pygame.display.flip()
             clock.tick(2)
             continue
 
-        # -------------------------------------------------------------
-        # Deterministic Wall-Clock Time Sync
-        # Any device with accurate NTP time will compute the exact same
-        # target slide at any given second, regardless of boot time.
-        # -------------------------------------------------------------
+        # ----------------------------------------------------------------------
+        # Deterministic Wall-Clock Modulo Sync
+        # offset = (now - epoch_anchor) % total_duration
+        # ----------------------------------------------------------------------
         now = time.time()
         offset = (now - epoch_anchor) % total_duration
 
@@ -280,30 +379,40 @@ def run_display():
                 target_slide = s
                 break
 
-        target_filename = target_slide.get("filename")
+        slide_id = target_slide.get("id")
 
-        if target_filename and target_filename != current_slide_filename:
-            file_path = os.path.join(CACHE_DIR, target_filename)
-            if os.path.exists(file_path):
-                if target_filename not in loaded_surfaces:
-                    try:
-                        raw_img = pygame.image.load(file_path).convert()
-                        loaded_surfaces[target_filename] = scale_surface(raw_img)
-                    except Exception as img_err:
-                        print(f"Error loading image {target_filename}: {img_err}")
+        if slide_id != current_slide_id:
+            content_type = target_slide.get("content_type", "image")
+            target_filename = target_slide.get("filename", "")
 
-                if target_filename in loaded_surfaces:
-                    screen.blit(loaded_surfaces[target_filename], (0, 0))
-                    pygame.display.flip()
-                    current_slide_filename = target_filename
+            # If surface not in memory, generate/load it
+            if slide_id not in loaded_surfaces:
+                if content_type == "text" or (not target_filename and target_slide.get("text_content")):
+                    title = target_slide.get("title", "Notice")
+                    body = target_slide.get("text_content", "")
+                    loaded_surfaces[slide_id] = render_text_slide(title, body)
+                elif target_filename:
+                    file_path = os.path.join(CACHE_DIR, target_filename)
+                    if os.path.exists(file_path):
+                        try:
+                            raw_img = pygame.image.load(file_path).convert()
+                            loaded_surfaces[slide_id] = scale_surface(raw_img)
+                        except Exception as e:
+                            print(f"[-] Image load failed for {target_filename}: {e}")
+                            loaded_surfaces[slide_id] = render_text_slide(target_slide.get("title", "Asset Error"), f"Could not load image: {target_filename}")
 
-                # Garbage collect surfaces no longer in active deck
-                active_set = {s.get("filename") for s in slides}
-                for dead_key in list(loaded_surfaces.keys()):
-                    if dead_key not in active_set:
-                        del loaded_surfaces[dead_key]
+            if slide_id in loaded_surfaces:
+                screen.blit(loaded_surfaces[slide_id], (0, 0))
+                pygame.display.flip()
+                current_slide_id = slide_id
 
-        clock.tick(10)  # 10 Hz is optimal for precise sub-second slide transitions
+                # Prune surfaces of slides no longer in deck
+                active_ids = {s.get("id") for s in slides}
+                for dead_id in list(loaded_surfaces.keys()):
+                    if dead_id not in active_ids:
+                        del loaded_surfaces[dead_id]
+
+        clock.tick(10)
 
 if __name__ == "__main__":
     load_cached_manifest()

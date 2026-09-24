@@ -2,7 +2,8 @@ import json
 import hashlib
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse, Http404
+from django.http import JsonResponse, Http404, HttpResponseBadRequest
+from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Q
 from django.utils import timezone
 from slideshow.models import SlideDeck, Slide, Device
@@ -108,8 +109,12 @@ def slide_create(request, deck_pk):
         if form.is_valid():
             slide = form.save(commit=False)
             slide.deck = deck
+            # Set order to next available if not provided
+            if not slide.order:
+                max_order = deck.slides.count()
+                slide.order = max_order + 1
             slide.save()
-            deck.save()
+            deck.save() # triggers last_updated
             return redirect('manage_slides', pk=deck.pk)
     return redirect('manage_slides', pk=deck.pk)
 
@@ -136,11 +141,34 @@ def slide_delete(request, pk):
         return redirect('manage_slides', pk=deck_pk)
     return render(request, 'management/slide_confirm_delete.html', {'slide': slide})
 
+@login_required
+@csrf_exempt
+def reorder_slides(request):
+    """
+    AJAX endpoint to update slide ordering dynamically from UI drag-and-drop or reordering buttons.
+    Expects JSON: {'order': [slide_id_1, slide_id_2, ...]}
+    """
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body.decode('utf-8'))
+            order_list = data.get('order', [])
+            for index, slide_id in enumerate(order_list):
+                Slide.objects.filter(id=slide_id).update(order=index + 1)
+            if order_list:
+                first_slide = Slide.objects.filter(id=order_list[0]).first()
+                if first_slide and first_slide.deck:
+                    first_slide.deck.save() # bump timestamp
+            return JsonResponse({'status': 'ok'})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+    return HttpResponseBadRequest('POST required')
+
 def device_manifest(request, identifier):
     """
     Delivers a deterministic JSON manifest containing active slide metadata,
     duration specifications, wall-clock epoch anchor, and an atomic SHA-256 version hash.
-    Accepts MAC address (colon/hyphen delimited) or hardware device ID.
+    Accepts MAC address (colon or hyphen delimited) or hardware device ID.
+    Auto-registers newly discovered displays for seamless onboarding.
     """
     norm_id = identifier.replace('-', ':').upper()
 
@@ -154,13 +182,28 @@ def device_manifest(request, identifier):
     if not device and identifier.isdigit():
         device = Device.objects.filter(pk=int(identifier)).first()
 
+    # Auto-register newly discovered display if it does not exist
     if not device:
-        return JsonResponse({"error": "Device not found"}, status=404)
+        client_ip = request.META.get('HTTP_X_CLIENT_IP') or request.META.get('HTTP_X_FORWARDED_FOR') or request.META.get('REMOTE_ADDR')
+        if client_ip:
+            client_ip = client_ip.split(',')[0].strip()
+        device = Device.objects.create(
+            name=f"New Display ({identifier[-8:] if len(identifier) >= 8 else identifier})",
+            device_id=identifier,
+            mac_address=norm_id if ':' in norm_id else None,
+            ip_address=client_ip,
+            last_seen=timezone.now(),
+            status="Online"
+        )
 
-    # Touch device last_seen timestamp as a passive heartbeat
+    # Update heartbeat and IP address
     if hasattr(device, 'last_seen'):
+        client_ip = request.META.get('HTTP_X_CLIENT_IP') or request.META.get('HTTP_X_FORWARDED_FOR') or request.META.get('REMOTE_ADDR')
+        if client_ip:
+            device.ip_address = client_ip.split(',')[0].strip()
         device.last_seen = timezone.now()
-        device.save(update_fields=['last_seen'])
+        device.status = "Online"
+        device.save(update_fields=['last_seen', 'ip_address', 'status'])
 
     deck = getattr(device, 'assigned_slidedeck', None) or getattr(device, 'slide_deck', None)
     if not deck:
@@ -169,7 +212,9 @@ def device_manifest(request, identifier):
             "deck_start_epoch": 0,
             "total_duration": 0,
             "slides": [],
-            "server_time": timezone.now().timestamp()
+            "server_time": timezone.now().timestamp(),
+            "device_name": device.name,
+            "status": "unassigned"
         })
 
     slides_qs = deck.slides.filter(active=True).order_by('order')
@@ -188,23 +233,43 @@ def device_manifest(request, identifier):
             media_url = request.build_absolute_uri(image_field.url)
             filename = image_field.name.split('/')[-1]
 
+        # Video asset if content_type is video
+        video_field = getattr(slide, 'video', None)
+        video_url = ""
+        if video_field and bool(video_field):
+            video_url = request.build_absolute_uri(video_field.url)
+            if not filename:
+                filename = video_field.name.split('/')[-1]
+
         slide_data.append({
             "id": slide.id,
-            "url": media_url,
+            "title": slide.title,
+            "url": media_url or video_url,
             "filename": filename,
             "duration": duration,
             "order": getattr(slide, 'order', 0),
-            "content_type": getattr(slide, 'content_type', 'image')
+            "content_type": getattr(slide, 'content_type', 'image'),
+            "text_content": getattr(slide, 'text_content', ''),
+            "youtube_video_id": getattr(slide, 'youtube_video_id', ''),
+            "calendar_url": getattr(slide, 'calendar_url', ''),
+            "calendar_display_style": getattr(slide, 'calendar_display_style', 'agenda'),
+            "latitude": getattr(slide, 'latitude', None),
+            "longitude": getattr(slide, 'longitude', None),
+            "rss_feed_url": getattr(slide, 'rss_feed_url', '')
         })
 
+    # Atomic version hash includes all slide data & order
     hash_payload = json.dumps(slide_data, sort_keys=True)
     version_hash = hashlib.sha256(hash_payload.encode('utf-8')).hexdigest()
 
     response_data = {
         "version_hash": version_hash,
-        "deck_start_epoch": 0,
+        "deck_start_epoch": 0,  # Unix epoch 0 (1970-01-01 UTC) anchor for deterministic modulo time sync
         "total_duration": total_duration,
         "slides": slide_data,
-        "server_time": timezone.now().timestamp()
+        "server_time": timezone.now().timestamp(),
+        "device_name": device.name,
+        "deck_name": deck.name,
+        "status": "active"
     }
     return JsonResponse(response_data)

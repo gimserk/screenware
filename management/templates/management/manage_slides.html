@@ -6,61 +6,133 @@
         <div>
             <a href="{% url 'slidedeck_list' %}" class="text-xs text-cyan-400 hover:underline">&larr; Back to Decks</a>
             <h1 class="text-2xl font-bold text-white mt-1">{{ deck.name }}: Manage Slides</h1>
+            <p class="text-xs text-slate-400">Total Deck Duration: <span class="font-bold text-cyan-400" id="totalDuration">{{ total_duration|default:0 }}</span>s</p>
+        </div>
+        <div>
+            <a href="{% url 'slidedeck_show' deck.pk %}" target="_blank" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-xs font-semibold transition inline-flex items-center gap-2">
+                <i class="fa-solid fa-play"></i> Web Preview
+            </a>
         </div>
     </div>
 
-    <!-- Add Slide Form -->
+    <!-- Dynamic Add Slide Form -->
     <div class="bg-slate-800 border border-slate-700 p-6 rounded-xl shadow">
         <h2 class="text-md font-bold text-white mb-4">Add New Slide to Deck</h2>
-        <form method="post" action="{% url 'slide_create' deck.pk %}" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <form method="post" action="{% url 'slide_create' deck.pk %}" enctype="multipart/form-data" class="space-y-4">
             {% csrf_token %}
-            <div>
-                <label class="block text-xs font-mono text-slate-400 mb-1">Title</label>
-                <input type="text" name="title" required class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-mono text-slate-400 mb-1">Title</label>
+                    <input type="text" name="title" required placeholder="e.g. Welcome Announcement" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-mono text-slate-400 mb-1">Duration (Seconds)</label>
+                    <input type="number" name="duration" value="10" min="1" required class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-mono text-slate-400 mb-1">Content Type</label>
+                    <select name="content_type" id="contentTypeSelect" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none">
+                        <option value="image">Image Asset</option>
+                        <option value="text">Text Announcement</option>
+                        <option value="video">Video (MP4)</option>
+                        <option value="youtube">YouTube Video</option>
+                        <option value="calendar">Calendar Agenda</option>
+                        <option value="weather">Weather Forecast</option>
+                        <option value="rss">RSS News Feed</option>
+                    </select>
+                </div>
             </div>
-            <div>
-                <label class="block text-xs font-mono text-slate-400 mb-1">Duration (Seconds)</label>
-                <input type="number" name="duration" value="10" required class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm">
-            </div>
-            <div>
-                <label class="block text-xs font-mono text-slate-400 mb-1">Content Type</label>
-                <select name="content_type" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm">
-                    <option value="image">Image</option>
-                    <option value="text">Text</option>
-                    <option value="video">Video</option>
-                </select>
-            </div>
-            <div>
-                <label class="block text-xs font-mono text-slate-400 mb-1">Image Asset</label>
+
+            <!-- Dynamic Field Containers -->
+            <div id="field-image" class="type-field">
+                <label class="block text-xs font-mono text-slate-400 mb-1">Image Asset (JPG/PNG)</label>
                 <input type="file" name="image" class="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-slate-700 file:text-white">
             </div>
-            <div class="md:col-span-4 flex justify-end">
-                <button type="submit" class="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded text-sm font-semibold">Add Slide</button>
+
+            <div id="field-text" class="type-field hidden">
+                <label class="block text-xs font-mono text-slate-400 mb-1">Announcement Body Text</label>
+                <textarea name="text_content" rows="3" placeholder="Enter message text to display on screen..." class="w-full bg-slate-900 border border-slate-700 rounded p-2.5 text-white text-sm focus:border-cyan-500 outline-none"></textarea>
+            </div>
+
+            <div id="field-video" class="type-field hidden">
+                <label class="block text-xs font-mono text-slate-400 mb-1">Video File (MP4)</label>
+                <input type="file" name="video" class="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-slate-700 file:text-white">
+            </div>
+
+            <div id="field-youtube" class="type-field hidden">
+                <label class="block text-xs font-mono text-slate-400 mb-1">YouTube Video ID (e.g. dQw4w9WgXcQ)</label>
+                <input type="text" name="youtube_video_id" placeholder="Video ID from URL" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none">
+            </div>
+
+            <div id="field-calendar" class="type-field hidden grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-mono text-slate-400 mb-1">Calendar Public iCal URL (.ics)</label>
+                    <input type="url" name="calendar_url" placeholder="https://calendar.google.com/.../basic.ics" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-mono text-slate-400 mb-1">Display Style</label>
+                    <select name="calendar_display_style" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm">
+                        <option value="agenda">Agenda List</option>
+                        <option value="month">Month Grid</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="field-weather" class="type-field hidden grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-mono text-slate-400 mb-1">Latitude</label>
+                    <input type="number" step="any" name="latitude" placeholder="41.139981" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-mono text-slate-400 mb-1">Longitude</label>
+                    <input type="number" step="any" name="longitude" placeholder="-104.820244" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-mono text-slate-400 mb-1">Weather API Key</label>
+                    <input type="text" name="api_key" placeholder="API Key" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm">
+                </div>
+            </div>
+
+            <div id="field-rss" class="type-field hidden">
+                <label class="block text-xs font-mono text-slate-400 mb-1">RSS News Feed URL</label>
+                <input type="url" name="rss_feed_url" placeholder="https://feeds.bbci.co.uk/news/rss.xml" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm">
+            </div>
+
+            <div class="flex justify-end pt-2">
+                <button type="submit" class="bg-cyan-600 hover:bg-cyan-500 text-white px-5 py-2 rounded text-sm font-semibold transition">Add Slide</button>
             </div>
         </form>
     </div>
 
-    <!-- Slide List -->
+    <!-- Active Slides List & Reordering -->
     <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow">
-        <div class="px-6 py-4 border-b border-slate-700">
-            <h2 class="text-md font-bold text-white">Active Slides ({{ slides.count }})</h2>
+        <div class="px-6 py-4 border-b border-slate-700 flex justify-between items-center">
+            <h2 class="text-md font-bold text-white">Slide Sequence ({{ slides.count }})</h2>
+            <span class="text-xs text-slate-400">Order determines playback sequence. Use buttons to reorder.</span>
         </div>
-        <div class="divide-y divide-slate-700/50">
+        <div id="slideList" class="divide-y divide-slate-700/50">
             {% for slide in slides %}
-            <div class="p-4 flex items-center justify-between hover:bg-slate-700/30 transition">
+            <div class="slide-item p-4 flex items-center justify-between hover:bg-slate-700/30 transition" data-id="{{ slide.id }}">
                 <div class="flex items-center space-x-4">
+                    <span class="text-xs font-mono text-slate-500 font-bold w-6">#{{ forloop.counter }}</span>
                     {% if slide.image %}
                     <img src="{{ slide.image.url }}" class="w-16 h-10 object-cover rounded bg-black">
+                    {% elif slide.content_type == 'text' %}
+                    <div class="w-16 h-10 bg-slate-900 border border-slate-700 rounded flex items-center justify-center text-xs text-cyan-400"><i class="fa-solid fa-font"></i></div>
+                    {% elif slide.content_type == 'video' %}
+                    <div class="w-16 h-10 bg-slate-900 border border-slate-700 rounded flex items-center justify-center text-xs text-indigo-400"><i class="fa-solid fa-video"></i></div>
                     {% else %}
-                    <div class="w-16 h-10 bg-slate-900 rounded flex items-center justify-center text-xs text-slate-500"><i class="fa-solid fa-file"></i></div>
+                    <div class="w-16 h-10 bg-slate-900 border border-slate-700 rounded flex items-center justify-center text-xs text-slate-400"><i class="fa-solid fa-layer-group"></i></div>
                     {% endif %}
                     <div>
                         <p class="font-semibold text-white">{{ slide.title }}</p>
-                        <p class="text-xs text-slate-400">{{ slide.content_type|upper }} &bull; {{ slide.duration }}s duration &bull; Order: {{ slide.order }}</p>
+                        <p class="text-xs text-slate-400">{{ slide.get_content_type_display }} &bull; {{ slide.duration }}s duration &bull; Order: {{ slide.order }}</p>
                     </div>
                 </div>
-                <div class="flex gap-2">
-                    <a href="{% url 'slide_update' slide.pk %}" class="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded text-white">Edit</a>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="moveSlide(this, -1)" class="p-1.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-300 hover:text-white text-xs"><i class="fa-solid fa-chevron-up"></i></button>
+                    <button type="button" onclick="moveSlide(this, 1)" class="p-1.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-300 hover:text-white text-xs"><i class="fa-solid fa-chevron-down"></i></button>
+                    <a href="{% url 'slide_update' slide.pk %}" class="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded text-white ml-2">Edit</a>
                     <a href="{% url 'slide_delete' slide.pk %}" class="text-xs bg-rose-900/60 hover:bg-rose-800 px-3 py-1.5 rounded text-rose-300">Delete</a>
                 </div>
             </div>
@@ -70,4 +142,59 @@
         </div>
     </div>
 </div>
+
+<script>
+// Toggle form input visibility based on chosen content type
+const typeSelect = document.getElementById('contentTypeSelect');
+const typeFields = {
+    'image': document.getElementById('field-image'),
+    'text': document.getElementById('field-text'),
+    'video': document.getElementById('field-video'),
+    'youtube': document.getElementById('field-youtube'),
+    'calendar': document.getElementById('field-calendar'),
+    'weather': document.getElementById('field-weather'),
+    'rss': document.getElementById('field-rss'),
+};
+
+typeSelect.addEventListener('change', function() {
+    for (const [key, el] of Object.entries(typeFields)) {
+        if (el) el.classList.add('hidden');
+    }
+    if (typeFields[this.value]) {
+        typeFields[this.value].classList.remove('hidden');
+    }
+});
+
+// Reorder slides via AJAX
+function moveSlide(btn, direction) {
+    const item = btn.closest('.slide-item');
+    const container = document.getElementById('slideList');
+    if (direction === -1 && item.previousElementSibling) {
+        container.insertBefore(item, item.previousElementSibling);
+    } else if (direction === 1 && item.nextElementSibling) {
+        container.insertBefore(item.nextElementSibling, item);
+    }
+    saveOrder();
+}
+
+function saveOrder() {
+    const items = document.querySelectorAll('.slide-item');
+    const order = Array.from(items).map(el => parseInt(el.getAttribute('data-id')));
+    fetch("{% url 'reorder_slides' %}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({ order: order })
+    }).then(res => res.json()).then(data => {
+        if (data.status === 'ok') {
+            items.forEach((el, idx) => {
+                const label = el.querySelector('span.font-mono');
+                if (label) label.textContent = '#' + (idx + 1);
+            });
+        }
+    }).catch(err => console.error(err));
+}
+</script>
 {% endblock %}
